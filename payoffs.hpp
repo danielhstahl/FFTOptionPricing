@@ -16,3 +16,7 @@ double Put(double s0, double y, double k){
     return 0;
   }
 }
+Complex Call(double v, double t, double alpha, auto& cf){ //used for Carr-Madan approach
+  Complex u=v-Complex(0, alpha+1);
+  return cf(u, t)/(alpha*alpha+alpha-v*v+Complex(0, (2*alpha+1)*v));
+}

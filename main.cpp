@@ -22,6 +22,9 @@ int main(){
   auto payoff=[&](double y){
     return Call(S0, y, K);
   };
+  auto payoffCF=[&](double v, double t, double alpha, auto& cf){
+    return Call(v, t, alpha, cf);
+  };
   double xmin=-5;
   double xmax=5;
   FSTS fsts(numSteps, xmin, xmax);
@@ -32,7 +35,7 @@ int main(){
   }
 
   CarrMadan carrm(numSteps);
-  std::vector<priceAndStrike> priceC=carrm.OptionPrice(t, discount, cf);
+  std::vector<priceAndStrike> priceC=carrm.OptionPrice(t, discount, payoffCF, cf);
 
   for(int i=0; i<cutoff; ++i){
     std::cout<<S0*exp(priceC[i].strike)<<", "<<priceC[i].price*S0<<std::endl;

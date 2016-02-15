@@ -7,7 +7,6 @@ struct priceAndStrike{
   double price;
   double strike;
 };
-Complex augmentedCF(double, double, auto&);//v, t, cf
 class CarrMadan{ //carr-madan option pricing
 private:
   int numSteps;
@@ -22,6 +21,7 @@ public:
   std::vector<priceAndStrike> OptionPrice(
     double,//t
     double,//discount
+    auto&, //augCF
     auto& //characteristic function
   );
 };
