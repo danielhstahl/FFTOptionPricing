@@ -1,6 +1,6 @@
 
 // Better optimized but less intuitive
-void ifft(std::vector<Complex>& x){
+auto ifft(CArray&& x){
 	// DFT
 	//std::reverse(x.begin(), x.end()); //reverse is O(n)
 	unsigned int N = x.size(), k = N, n;
@@ -21,7 +21,7 @@ void ifft(std::vector<Complex>& x){
 				x[a] = x[a]+x[b];
 				x[b] = t * T;
 			}
-			T = T*phiT;
+			T *= phiT;
 		}
 	}
 	// Decimate
@@ -42,10 +42,11 @@ void ifft(std::vector<Complex>& x){
 			x[b] = t;
 		}
 	}
+  return std::move(x);
 }
 
 // fft (in-place)
-void fft(std::vector<Complex>& x){
+auto fft(CArray&& x){
 	//std::reverse(x.begin(), x.end()); //reverse is O(n)
   unsigned int N = x.size(), k = N, n;
   double thetaT = M_PI / N;
@@ -86,61 +87,5 @@ void fft(std::vector<Complex>& x){
       x[b] = t;
     }
   }
+  return std::move(x);
 }
-
-/*void fft(std::vector<Complex>& x){
-  fft(1, x);
-}
-void ifft(std::vector<Complex>& x){
-  fft(-1, x);
-}
-void fft(int dir,std::vector<Complex>& x){
-   long n,i,i1,j,k,i2,l,l1,l2;
-   double c1,c2;//,tx,ty,t1,t2,u1,u2,z;
-    n=x.size();
-   // Do the bit reversal
-   i2 = n >> 1;
-   j = 0;
-   for (i=0;i<n-1;i++) {
-      if (i < j) {
-        std::swap(x[i],x[j]);
-      }
-      k = i2;
-      while (k <= j) {
-         j -= k;
-         k >>= 1;
-      }
-      j += k;
-   }
-	 unsigned int m = (unsigned int)log2(n);
-
-
-   l2 = 1;
-   Complex c(-1, 0);
-   for (l=0;l<m;l++) {
-      l1 = l2;
-      l2 <<= 1;
-      Complex u(1, 0);
-      //u1 = 1.0;
-      //u2 = 0.0;
-      for (j=0;j<l1;j++) {
-         for (i=j;i<n;i+=l2) {
-            i1 = i + l1;
-
-            Complex t=x[i1]*u;
-            x[i1]=x[i]-t;
-            x[i]=x[i]+t;
-         }
-         u=u*c;
-      }
-      c2 = sqrt((1.0 - c.getReal()) / 2.0);
-      if (dir == 1){
-         c2 = -c2;
-       }
-      c1 = sqrt((1.0 + c.getReal()) / 2.0);
-      c.setValues(c1, c2);
-      //c=Complex(c1, c2);
-   }
-
-}
-*/

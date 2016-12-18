@@ -1,12 +1,15 @@
 #ifndef __FFT_H_INCLUDED__
 #define __FFT_H_INCLUDED__
-#include "Complex.h"
+#include <complex>
 #include <iostream>
 #include <vector>
 #include <cmath>
 #define _USE_MATH_DEFINES
-void fft(std::vector<Complex>&);
-void ifft(std::vector<Complex>&);
+typedef std::complex<double> Complex;
+typedef std::vector<Complex> CArray;
+ 
+//CArray fft(CArray&&);
+//CArray ifft(CArray&&);
 //void fft(int, std::vector<Complex>&);
 #include "fft.hpp"
 #endif

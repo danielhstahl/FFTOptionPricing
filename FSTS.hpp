@@ -7,7 +7,7 @@ FSTS::FSTS(int numSteps_, double xmin_, double xmax_){
   du=2*vmax/numSteps;
 
 }
-std::vector<priceAndUnderlying> FSTS::OptionPrice(//european for now
+std::vector<priceAndUnderlying> FSTS::OptionPrice(
   double t, //time to maturity
   double discount,//e^{-rt} in BS
   auto& payoff,//function payoff from payoffs.h
