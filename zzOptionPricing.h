@@ -32,6 +32,7 @@ namespace optionprice{
         });
     }
 
+    
 
 
     /**
@@ -42,30 +43,52 @@ namespace optionprice{
     template<typename Index, typename Number, typename Discount, typename Payoff, typename CF>
     auto FSTS(
         const Index& numSteps, 
+        const Number& xmin, 
         const Number& xmax, 
         Discount&& discount, 
         Payoff&& payoff, 
         CF&& cf
     ){
-        auto dx=computeDX(numSteps, -xmax, xmax);
+        auto dx=computeDX(numSteps, xmin, xmax);
+        //auto vmax=.5*(numSteps-1.0)/(xmax-xmin);
         auto vmax=M_PI/dx;
         auto du=2.0*vmax/numSteps;
+        //auto vmin=0.0;
+        auto vmin=du-vmax;
+        //auto du=2.0*vmax/(numSteps-1.0);
         auto incrementedPayoff=ifft(
             futilities::for_each_parallel(
                 fft(
                     futilities::for_each_parallel(0, numSteps, [&](const auto& index){
-                        return std::complex<double>(payoff(getDomain(-xmax, dx, index)), 0);
+                        return payoff(getDomain(-xmax, dx, index))*exp(
+                        std::complex<double>(0, -getDomain(0.0, dx*vmin, index)));
                     })
                 ), 
                 [&](const auto& val, const auto& index){
-                    return val*cf(std::complex<double>(0, getUDomain(vmax, du, index)));
+                    return val*cf(std::complex<double>(0, getDomain(vmin, du, index)));
                 }
             )
         );
         return futilities::for_each_parallel(0, numSteps, [&](const auto& index){
-            return discount(getDomain(-xmax, dx, index))*incrementedPayoff[index].real()/numSteps;
+            return discount(getDomain(-xmax, dx, index))*
+            (incrementedPayoff[index]*exp(
+                std::complex<double>(0, getDomain(0.0, vmin*dx, index)))
+                ).real()/numSteps;
         });
     }
+
+
+    template<typename Index, typename Number, typename Discount, typename Payoff, typename CF>
+    auto FSTS(
+        const Index& numSteps, 
+        const Number& xmax, 
+        Discount&& discount, 
+        Payoff&& payoff, 
+        CF&& cf
+    ){
+        return FSTS(numSteps, -xmax, xmax, discount, payoff, cf);
+    }
+
 }
 
 #endif
