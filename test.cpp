@@ -54,7 +54,7 @@ TEST_CASE("FSTS", "OptionPricing"){
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
-        REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig)).epsilon(.001));
+        REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig)).epsilon(.0001));
     }
 }
 
@@ -72,14 +72,11 @@ TEST_CASE("CarrMadan", "[OptionPricing]"){
     auto r=.05;
     auto sig=.3;
     auto T=1.0;
-    auto S0=50.0; 
-
+    //auto S0=50.0; 
+    auto discount=exp(-r*T);
     
     auto BSCF=[&](const auto& u){
-        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
-    };
-    auto discount=[&](){
-        return exp(-r*T);
+        return /*S0**/chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
 
     auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
@@ -98,23 +95,22 @@ TEST_CASE("CarrMadan", "[OptionPricing]"){
         }
     };
     int numX=pow(2, 10);
-    double xmax=5.0;
+    auto ada=.25;
     auto myOptionsPrice=optionprice::CarrMadan(numX,  
-        discount(), 
+        ada,
+        discount, 
         [&](const auto& v, const auto& alpha){return optionprice::CallAug(v, alpha, BSCF);}
     );
-    /*auto myXDomain=futilities::for_each_parallel(0, numX, [&](const auto& index){
-        -b+lambda*i
-        return K*exp(val);
-    });*/
-    auto b=optionprice::getMinK(.25);
+    auto b=optionprice::getMaxK(ada);
     auto myXDomain=futilities::for_emplace_back(-b, b, numX, [&](const auto& val){
-        return S0*exp(val);
+        return /*S0**/exp(val);
     });
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
+    
     for(;i<mxX; ++i){
-        REQUIRE(myOptionsPrice[i]==Approx(BS(S0, discount(), myXDomain[i], sig)).epsilon(.001));
+        std::cout<<myOptionsPrice[i+1]<<", "<<myXDomain[i+1]<<", "<<BS(1.0, discount, myXDomain[i+1], sig)<<std::endl;
+        //REQUIRE(myOptionsPrice[i]==Approx(BS(S0, discount(), myXDomain[i], sig)).epsilon(.00001));
     }
 }
 
