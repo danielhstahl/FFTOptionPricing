@@ -75,12 +75,16 @@ namespace optionprice{
     */
     template<typename Number1, typename Number2,  typename CF>
     auto CallAug(const Number1& v, const Number2& alpha, CF& cf){ //used for Carr-Madan approach...v is typically complex
-        auto u=v+(alpha+1.0);
-        return cf(u)/(alpha*alpha+alpha+v*v+(2*alpha+1)*v);
+        //auto u=;
+        return cf(v+(alpha+1.0))/(alpha*alpha+alpha+v*v+(2*alpha+1)*v);
     }
     template<typename Number>
     auto getMaxK(const Number& ada){
         return M_PI/ada;
+    }
+    template<typename Index, typename Number>
+    auto getLambda(const Index& numSteps, const Number& b){
+        return 2.0*b/numSteps;
     }
     /**
     Carr-Madan: with respsect to K, not S
@@ -95,15 +99,16 @@ namespace optionprice{
         CF&& augCF
     ){
         auto b=getMaxK(ada);
-        auto lambda=2.0*b/numSteps;
-        auto adjustFirst=[](auto&& array){
-            array[0]=array[0]/2.0;
-            return std::move(array);
-        };
-        auto cmplVector=fft(adjustFirst(futilities::for_each_parallel(0, numSteps, [&](const auto& index){
-            auto pm=index%2==0?-1.0:1.0;
-            return discount*augCF(std::complex<double>(0, index*ada), alpha)*exp(std::complex<double>(0, b*index*ada))*(3.0+pm);
-        })));
+        auto lambda=getLambda(numSteps, b);
+        auto adjustFirst=[](auto&& array){array[0]=array[0]/2.0;return std::move(array);};
+        auto cmplVector=fft(
+            adjustFirst(
+                futilities::for_each_parallel(0, numSteps, [&](const auto& index){
+                    auto pm=index%2==0?-1.0:1.0;
+                    return discount*augCF(std::complex<double>(0, index*ada), alpha)*exp(std::complex<double>(0, b*index*ada))*(3.0+pm);
+                })
+            )
+        );
         return futilities::for_each_parallel(0, numSteps, [&](const auto& index){
             return cmplVector[index].real()*exp(-alpha*getDomain(-b, lambda, index))*ada/(M_PI*3.0);
         });

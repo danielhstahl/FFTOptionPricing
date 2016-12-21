@@ -1,6 +1,5 @@
 *.o
 optionPricing.o
 .vscode
-.test
 test
 optionPricing

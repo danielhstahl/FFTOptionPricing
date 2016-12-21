@@ -54,31 +54,19 @@ TEST_CASE("FSTS", "OptionPricing"){
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
-        REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig)).epsilon(.0001));
+        REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))).epsilon(.0001));
     }
 }
 
-/*TEST_CASE("fft", "[Functional]"){
-    std::vector<std::complex<double> > vals;
-    for(int i=0; i<4; ++i){
-        vals.emplace_back(std::complex<double>(i, 0));
-    }
-    auto cmpVals=vals;
-    REQUIRE(fft(ifft(std::move(vals)))==cmpVals);
-    
-}*/
 
 TEST_CASE("CarrMadan", "[OptionPricing]"){
     auto r=.05;
     auto sig=.3;
     auto T=1.0;
-    //auto S0=50.0; 
     auto discount=exp(-r*T);
-    
     auto BSCF=[&](const auto& u){
-        return /*S0**/chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
-
     auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
         if(sigma>0){
             double s=sqrt(2.0);
@@ -102,15 +90,15 @@ TEST_CASE("CarrMadan", "[OptionPricing]"){
         [&](const auto& v, const auto& alpha){return optionprice::CallAug(v, alpha, BSCF);}
     );
     auto b=optionprice::getMaxK(ada);
-    auto myXDomain=futilities::for_emplace_back(-b, b, numX, [&](const auto& val){
-        return /*S0**/exp(val);
+    auto lambda=optionprice::getLambda(numX, b);
+    auto myXDomain=futilities::for_each_parallel(0, numX, [&](const auto& index){
+        return /*S0**/exp(optionprice::getDomain(-b, lambda, index));
     });
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
-    
     for(;i<mxX; ++i){
-        std::cout<<myOptionsPrice[i+1]<<", "<<myXDomain[i+1]<<", "<<BS(1.0, discount, myXDomain[i+1], sig)<<std::endl;
-        //REQUIRE(myOptionsPrice[i]==Approx(BS(S0, discount(), myXDomain[i], sig)).epsilon(.00001));
+        //std::cout<<myOptionsPrice[i+1]<<", "<<myXDomain[i+1]<<", "<<BS(1.0, discount, myXDomain[i+1], sig)<<std::endl;
+        REQUIRE(myOptionsPrice[i]==Approx(BS(1.0, discount, myXDomain[i], sig*sqrt(T))).epsilon(.0001));
     }
 }
 
