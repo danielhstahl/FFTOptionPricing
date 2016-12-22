@@ -68,8 +68,25 @@ namespace optionprice{
             return discount(getDomain(-xmax, dx, index))*incrementedPayoff[index].real()/numSteps;
         });
     }
-
-
+    
+    /**
+    Fang Oosterlee approach
+    
+    */
+    template<typename Number>
+    auto chiK(const Number& a, const Number& b, const Number& c, const Number& d, const Number& k){
+        auto efficientSquare=[](const auto& num){
+            return num*num;
+        };
+        auto elementIterate=[&](const auto&
+        auto coef=1.0/(1+efficientSquare(k*M_PI/(b-a)));
+        auto expD=exp(d);
+        auto expC=exp(c);
+        cos(k*M_PI*(d-a)/(b-a))*expD-cos(k*M_PI*(c-a)/(b-a))*expC
+        
+    }
+    
+    
     /**
     Used for Carr-Madan call option http://engineering.nyu.edu/files/jcfpub.pdf
     */
