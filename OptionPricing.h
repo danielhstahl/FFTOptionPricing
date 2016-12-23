@@ -4,6 +4,7 @@
 #include <vector>
 #include "FunctionalUtilities.h"
 #include "CharacteristicFunctions.h"
+#include "FangOost.h"
 #include "RungeKutta.h"
 #include "fft.h"
 namespace optionprice{
