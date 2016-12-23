@@ -3,8 +3,9 @@
 #include <complex>
 #include <iostream>
 #include <vector>
-#include <cmath>
 #define _USE_MATH_DEFINES
+#include <cmath>
+
 typedef std::complex<double> Complex;
 typedef std::vector<Complex> CArray;
  
