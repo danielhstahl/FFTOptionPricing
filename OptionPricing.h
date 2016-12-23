@@ -123,7 +123,17 @@ namespace optionprice{
         }));
         
     }
-    
+    template<typename Index, typename Number,  typename CF>
+    auto FangOost(
+        const Index& numXSteps, 
+        const Index& numUSteps, 
+        const Number& xMax, 
+        const Number& K, 
+        const Number& discount
+        CF&& cf
+     ){
+        return FangOost(numXSteps, numUSteps, -xMax, xMax, K, discount, cf);
+     }
     
     /**
     Used for Carr-Madan call option http://engineering.nyu.edu/files/jcfpub.pdf
