@@ -82,7 +82,7 @@ namespace optionprice{
         auto kPiBA=k*M_PI/(b-a);
         auto iterS=[&](const auto& x){
             return kPiBA*(x-a);
-        }
+        };
         auto coef=1.0/(1+efficientSquare(kPiBA));
         auto expD=exp(d);
         auto expC=exp(c);
@@ -94,7 +94,7 @@ namespace optionprice{
         auto kPiBA=k*M_PI/(b-a);
         auto iterS=[&](const auto& x){
             return kPiBA*(x-a);
-        }
+        };
         return k==0?d-c:(sin(iterS(d))-sin(iterS(c)))/kPiBA;
     }
     
