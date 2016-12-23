@@ -108,7 +108,7 @@ namespace optionprice{
         const Number& xMin, 
         const Number& xMax, 
         const Number& K, 
-        const Number& discount
+        const Number& discount,
         CF&& cf
      ){
     
@@ -130,7 +130,7 @@ namespace optionprice{
         const Index& numUSteps, 
         const Number& xMax, 
         const Number& K, 
-        const Number& discount
+        const Number& discount,
         CF&& cf
      ){
         return FangOost(numXSteps, numUSteps, -xMax, xMax, K, discount, cf);
