@@ -86,7 +86,7 @@ namespace optionprice{
         auto coef=1.0/(1+efficientSquare(kPiBA));
         auto expD=exp(d);
         auto expC=exp(c);
-        return coef*(cos(iterS(d))*expD-cos(iterS(c))*expC+kPiBA*sin(iterS(d)*expD-kPiBA*sin(iterS(c))*expC);
+        return coef*(cos(iterS(d))*expD-cos(iterS(c))*expC+kPiBA*sin(iterS(d))*expD-kPiBA*sin(iterS(c))*expC);
     }
     template<typename Number, typename Index>
     auto phiK(const Number& a, const Number& b, const Number& c, const Number& d, const Index& k){
@@ -95,7 +95,7 @@ namespace optionprice{
         auto iterS=[&](const auto& x){
             return kPiBA*(x-a);
         }
-        return k==0?d-c:(sin(iterS(d))-sin(iterS(c)))/kPiBA);
+        return k==0?d-c:(sin(iterS(d))-sin(iterS(c)))/kPiBA;
     }
     
     /**
