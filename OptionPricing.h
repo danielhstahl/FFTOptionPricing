@@ -73,16 +73,54 @@ namespace optionprice{
     Fang Oosterlee approach
     
     */
-    template<typename Number>
-    auto chiK(const Number& a, const Number& b, const Number& c, const Number& d, const Number& k){
+    template<typename Number, typename Index>
+    auto chiK(const Number& a, const Number& b, const Number& c, const Number& d, const Index& k){
         auto efficientSquare=[](const auto& num){
             return num*num;
         };
-        auto elementIterate=[&](const auto&
-        auto coef=1.0/(1+efficientSquare(k*M_PI/(b-a)));
+        auto kPiBA=k*M_PI/(b-a);
+        auto iterS=[&](const auto& x){
+            return kPiBA*(x-a);
+        }
+        auto coef=1.0/(1+efficientSquare(kPiBA));
         auto expD=exp(d);
         auto expC=exp(c);
-        cos(k*M_PI*(d-a)/(b-a))*expD-cos(k*M_PI*(c-a)/(b-a))*expC
+        return coef*(cos(iterS(d))*expD-cos(iterS(c))*expC+kPiBA*sin(iterS(d)*expD-kPiBA*sin(iterS(c))*expC);
+    }
+    template<typename Number, typename Index>
+    auto phiK(const Number& a, const Number& b, const Number& c, const Number& d, const Index& k){
+   
+        auto kPiBA=k*M_PI/(b-a);
+        auto iterS=[&](const auto& x){
+            return kPiBA*(x-a);
+        }
+        return k==0?d-c:(sin(iterS(d))-sin(iterS(c)))/kPiBA);
+    }
+    
+    /**
+    For a call, the "VK" is (2/(b-a))*K(chiK(0, b)-phiK(0, b))
+    */
+    template<typename Index, typename Number,  typename CF>
+    auto FangOost(
+        const Index& numXSteps, 
+        const Index& numUSteps, 
+        const Number& xMin, 
+        const Number& xMax, 
+        const Number& K, 
+        const Number& discount
+        CF&& cf
+     ){
+    
+        //int xDiscrete, int uDiscrete,  const Number& xMin, const Number& xMax, auto&& fnInv, auto&& vK
+        return fangoost::computeInv(numXSteps, numUSteps, xMin, xMax, cf, 
+           /* [&](const auto& u, const auto& x){
+                return K*(chiK(xMin, xMax, 0.0, xMax, index)-phiK(xMin, xMax, 0.0, xMax, index))*2.0/(xMax-xMin);
+            });*/
+        
+        
+        futilities::for_each_parallel(0, numSteps, [&](const auto& index){
+            return K*(chiK(xMin, xMax, 0.0, xMax, index)-phiK(xMin, xMax, 0.0, xMax, index))*2.0/(xMax-xMin);
+        }));
         
     }
     
