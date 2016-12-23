@@ -119,7 +119,7 @@ namespace optionprice{
             });*/
         
         
-        futilities::for_each_parallel(0, numSteps, [&](const auto& index){
+        futilities::for_each_parallel(0, numUSteps, [&](const auto& index){
             return K*(chiK(xMin, xMax, 0.0, xMax, index)-phiK(xMin, xMax, 0.0, xMax, index))*2.0/(xMax-xMin);
         }));
         
