@@ -59,6 +59,47 @@ TEST_CASE("FSTS", "OptionPricing"){
 }
 
 
+TEST_CASE("FangOosterlee", "OptionPricing"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto K=50.0; 
+    //auto initValue=50.0;
+    
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=exp(-r*T);
+
+    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
+        if(sigma>0){
+            double s=sqrt(2.0);
+            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
+            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
+        }
+        else{
+            if(S0>k){
+                return (S0-k)*discount;
+            }
+            else{
+                return 0.0;
+            }
+        }
+    };
+    int numX=pow(2, 10);
+    int numU=256;
+    double xmax=5.0;
+    auto myOptionsPrice=optionprice::FangOost(numX, numU, xmax, K, discount, BSCF);
+    auto myXDomain=futilities::for_emplace_back(-xmax, xmax, numX, [&](const auto& val){
+        return K*exp(val);
+    });
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){
+        REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))).epsilon(.0001));
+    }
+}
+
 TEST_CASE("CarrMadan", "[OptionPricing]"){
     auto r=.05;
     auto sig=.3;
