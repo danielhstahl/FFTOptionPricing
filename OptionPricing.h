@@ -25,8 +25,8 @@ namespace optionprice{
         return startPoint*exp(logDomain);
     }
 
-    template<typename Number>
-    std::vector<Number> computeXRange(int xDiscrete, const Number& xMin, const Number& xMax){
+    template<typename Index, typename Number>
+    auto computeXRange(const Index& xDiscrete, const Number& xMin, const Number& xMax){
         return futilities::for_emplace_back(xMin, xMax, xDiscrete, [](const auto& val){
             return val;
         });
