@@ -3,3 +3,4 @@ optionPricing.o
 .vscode
 test
 optionPricing
+error.log
