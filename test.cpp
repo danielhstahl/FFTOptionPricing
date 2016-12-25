@@ -48,23 +48,21 @@ TEST_CASE("FSTS", "OptionPricing"){
         [&](const auto& logR){return payoff(K, logR, K);}, 
         BSCF
     );
-    auto myXDomain=futilities::for_emplace_back(-xmax, xmax, numX, [&](const auto& val){
-        return K*exp(val);
-    });
+    auto myXDomain=optionprice::getFSTSUnderlying(-xmax, xmax, K, numX);
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
         REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))).epsilon(.0001));
     }
 }
-
-
 TEST_CASE("FangOosterlee", "OptionPricing"){
     auto r=.05;
     auto sig=.3;
     auto T=1.0;
     auto K=50.0; 
     //auto initValue=50.0;
+    
+
     
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
@@ -84,19 +82,21 @@ TEST_CASE("FangOosterlee", "OptionPricing"){
             else{
                 return 0.0;
             }
-        }
+        } 
     };
+    double xmax=5.0;
     int numX=pow(2, 10);
     int numU=256;
-    double xmax=5.0;
-    auto myOptionsPrice=optionprice::FangOost(numX, numU, xmax, K, discount, BSCF);
-    auto myXDomain=futilities::for_emplace_back(-xmax, xmax, numX, [&](const auto& val){
-        return K*exp(val);
-    });
+    auto myXDomain=optionprice::getFangOostUnderlying(-xmax, xmax, K, numX);
+
+    auto myOptionsPrice=optionprice::FangOost(numX, numU, xmax,K, discount, BSCF);
+    
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
-    for(;i<mxX; ++i){
-        REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))).epsilon(.0001));
+    for(;i<mxX; ++i){ 
+        auto put=BS(myXDomain[i], discount, K, sig*sqrt(T))+K*discount-myXDomain[i];
+        //std::cout<<myOptionsPrice[i+1]<<", "<<myXDomain[i+1]<<", "<<put<<", "<<put/myOptionsPrice[i+1]<<std::endl;
+        REQUIRE(myOptionsPrice[i]==Approx(put).epsilon(.0001));
     }
 }
 
@@ -104,6 +104,7 @@ TEST_CASE("CarrMadan", "[OptionPricing]"){
     auto r=.05;
     auto sig=.3;
     auto T=1.0;
+    auto S0=5.0;
     auto discount=exp(-r*T);
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
@@ -127,19 +128,17 @@ TEST_CASE("CarrMadan", "[OptionPricing]"){
     auto ada=.25;
     auto myOptionsPrice=optionprice::CarrMadan(numX,  
         ada,
+        S0, 
         discount, 
         [&](const auto& v, const auto& alpha){return optionprice::CallAug(v, alpha, BSCF);}
     );
     auto b=optionprice::getMaxK(ada);
     auto lambda=optionprice::getLambda(numX, b);
-    auto myXDomain=futilities::for_each_parallel(0, numX, [&](const auto& index){
-        return /*S0**/exp(optionprice::getDomain(-b, lambda, index));
-    });
+    auto myXDomain=optionprice::getCarrMadanStrikes(ada, S0, numX);
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
-        //std::cout<<myOptionsPrice[i+1]<<", "<<myXDomain[i+1]<<", "<<BS(1.0, discount, myXDomain[i+1], sig)<<std::endl;
-        REQUIRE(myOptionsPrice[i]==Approx(BS(1.0, discount, myXDomain[i], sig*sqrt(T))).epsilon(.0001));
+        REQUIRE(myOptionsPrice[i]==Approx(BS(S0, discount, myXDomain[i], sig*sqrt(T))).epsilon(.0001));
     }
 }
 
