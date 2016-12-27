@@ -10,14 +10,14 @@ CALL :cloneAndCheckout RungeKutta b286ce51f5e6957a59a5a49a3d1c60abdd765af4
 EXIT /B %ERRORLEVEL%
 
 :cloneAndCheckout 
-ECHO %0
-IF EXIST %0  (
-    cd %0
+ECHO %1
+IF EXIST %  (
+    cd %1
     git pull origin master
 ) ELSE (
     git clone https://github.com/phillyfan1138/%1
-	cd %0
+	cd %1
 )
-git checkout %1
+git checkout %2
 cd ..
 EXIT /B 0
