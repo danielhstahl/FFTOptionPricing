@@ -10,9 +10,7 @@ CALL :cloneAndCheckout "RungeKutta" "b286ce51f5e6957a59a5a49a3d1c60abdd765af4"
 EXIT /B %ERRORLEVEL%
 
 :cloneAndCheckout 
-SET currFolder=%~f1
-ECHO %currFolder%
-ECHO %1
+cd ..
 IF EXIST %1  (
     cd %1
     git pull origin master
@@ -22,4 +20,5 @@ IF EXIST %1  (
 )
 git checkout %2
 cd ..
+cd FFTOptionPricing
 EXIT /B 0
