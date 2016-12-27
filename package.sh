@@ -15,6 +15,8 @@ function cloneAndCheckout {
 	cd ..
 }
 
+cloneAndCheckout FunctionalUtilities cb634c343585267d51409a4af1871dde613f8b9c
+
 cloneAndCheckout CharacteristicFunctions 59d5f2e1789bdcfc8d861645ef3d6392de79832f
 
 cloneAndCheckout FangOost d74b4e541aa5569ccd99192fe3d256e7d23b3883
