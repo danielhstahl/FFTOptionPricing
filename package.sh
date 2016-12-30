@@ -13,6 +13,7 @@ function cloneAndCheckout {
 
 	git checkout $2
 	cd ..
+	cd FFTOptionPricing
 }
 
 cloneAndCheckout FunctionalUtilities cb634c343585267d51409a4af1871dde613f8b9c
