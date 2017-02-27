@@ -4,3 +4,5 @@ optionPricing.o
 test
 optionPricing
 error.log
+*.gcda
+*.gcno
