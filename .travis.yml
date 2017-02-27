@@ -1,0 +1,31 @@
+language: cpp
+sudo: true
+
+
+matrix:
+  include:
+ 
+    - os: linux
+      dist: trusty #xenial
+      env:
+         - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
+
+before_install:
+  - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+  - sudo apt-get -y update
+  - sudo apt-get -y install gcc-5 g++-5
+  - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 60 --slave /usr/bin/g++ g++ /usr/bin/g++-5
+  - g++ -v
+  - eval "${MATRIX_EVAL}"
+  - cd ..
+  - git clone https://github.com/phillyfan1138/FunctionalUtilities
+  - git clone https://github.com/phillyfan1138/RungeKutta
+  - git clone https://github.com/phillyfan1138/FangOost
+  - git clone https://github.com/phillyfan1138/CharacteristicFunctions
+  - cd FFTOptionPricing
+script:
+  - make
+  - ./test
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash) 
