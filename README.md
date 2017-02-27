@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/phillyfan1138/FFTOptionPricing.svg?branch=master)](https://travis-ci.org/phillyfan1138/FFTOptionPricing)
+[![codecov](https://codecov.io/gh/phillyfan1138/FFTOptionPricing/branch/master/graph/badge.svg)](https://codecov.io/gh/phillyfan1138/FFTOptionPricing)
 
 
 ##FFT Option Pricing
