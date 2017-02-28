@@ -1,7 +1,7 @@
 os: Visual Studio 2015 CTP  
 version: 1.1.0.{build}
 
-build: off
+
 
 configuration:
 - Release
@@ -13,7 +13,7 @@ environment:
   - VS_VERSION: 14 2015
     VS_PLATFORM: x64
 
-before_build:
+install:
   - cd ..
   - git clone https://github.com/phillyfan1138/FunctionalUtilities
   - git clone https://github.com/phillyfan1138/RungeKutta
@@ -21,5 +21,7 @@ before_build:
   - git clone https://github.com/phillyfan1138/CharacteristicFunctions
   - cd FFTOptionPricing 
 #-"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x64
+build: off
+
 test_script:
  - make
