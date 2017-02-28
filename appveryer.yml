@@ -20,6 +20,6 @@ before_build:
   - git clone https://github.com/phillyfan1138/CharacteristicFunctions
   - cd FFTOptionPricing 
 #-"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x64
-
+build: off
 build_script:
  - make
