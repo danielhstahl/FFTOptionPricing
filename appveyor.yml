@@ -22,25 +22,16 @@ configuration:
   #- VS_VERSION: 14 2015
   #  VS_PLATFORM: x64
 
-# scripts that are called at very beginning, before repo cloning
-init:
-  - cmd: cmake --version
-  - cmd: msbuild /version
 
-
-install:
-  - ps: cd ..
-  - ps: git clone https://github.com/phillyfan1138/FunctionalUtilities
-  - ps: git clone https://github.com/phillyfan1138/RungeKutta
-  - ps: git clone https://github.com/phillyfan1138/FangOost
-  - ps: git clone https://github.com/phillyfan1138/CharacteristicFunctions
-  - ps: cd FFTOptionPricing 
-#-"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x64
 
 before_build:
-  #- cmd: cd C:\projects\dart
+  - cmd: cd C:\projects
+  - cmd: git clone https://github.com/phillyfan1138/FunctionalUtilities
+  - cmd: git clone https://github.com/phillyfan1138/RungeKutta
+  - cmd: git clone https://github.com/phillyfan1138/FangOost
+  - cmd: git clone https://github.com/phillyfan1138/CharacteristicFunctions
+  - cmd: cd FFTOptionPricing
   - cmd: make
-
 
 build: off
 
