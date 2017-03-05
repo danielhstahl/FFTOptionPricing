@@ -22,20 +22,18 @@ configuration:
   #- VS_VERSION: 14 2015
   #  VS_PLATFORM: x64
 
+clone_folder: C:\projects\fft
 
-
-before_build:
+install:
   - cmd: cd C:\projects
   - cmd: git clone https://github.com/phillyfan1138/FunctionalUtilities
   - cmd: git clone https://github.com/phillyfan1138/RungeKutta
   - cmd: git clone https://github.com/phillyfan1138/FangOost
   - cmd: git clone https://github.com/phillyfan1138/CharacteristicFunctions
-  - cmd: cd FFTOptionPricing
+  - cmd: cd fft
   - cmd: make
 
 build: off
-
-
 test: off
 
 
