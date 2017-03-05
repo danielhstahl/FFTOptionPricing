@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/phillyfan1138/FFTOptionPricing.svg?branch=master)](https://travis-ci.org/phillyfan1138/FFTOptionPricing)
+[![Build status](https://ci.appveyor.com/api/projects/status/i7agjioyxflo0xgq?svg=true)](https://ci.appveyor.com/project/phillyfan1138/fftoptionpricing)
 [![codecov](https://codecov.io/gh/phillyfan1138/FFTOptionPricing/branch/master/graph/badge.svg)](https://codecov.io/gh/phillyfan1138/FFTOptionPricing)
 
 
