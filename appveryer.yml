@@ -1,26 +1,52 @@
-os: Visual Studio 2015 CTP  
-version: 1.1.0.{build}
+# Specify version format
+version: "{build}"
 
-
+# Operating system (build VM template)
+os: Visual Studio 2015
+# build platform, i.e. Win32 (instead of x86), x64, Any CPU. This setting is optional.
+platform: 
+  - Win32
+  #- x64  Disable build for x64 machine until x64 version of dart-prerequisites is ready
 
 environment:
-  matrix:
-  - VS_VERSION: 14 2015
-    VS_PLATFORM: win32
-  - VS_VERSION: 14 2015
-    VS_PLATFORM: x64
+  MSVC_DEFAULT_OPTIONS: ON
+
+# build configuration, i.e. Debug, Release, etc.
+configuration:
+  - Debug
+  - Release
+#environment:
+ # matrix:
+  #- VS_VERSION: 14 2015
+  #  VS_PLATFORM: win32
+  #- VS_VERSION: 14 2015
+  #  VS_PLATFORM: x64
+
+# scripts that are called at very beginning, before repo cloning
+init:
+  - cmd: cmake --version
+  - cmd: msbuild /version
+
 
 install:
-  - cd ..
-  - git clone https://github.com/phillyfan1138/FunctionalUtilities
-  - git clone https://github.com/phillyfan1138/RungeKutta
-  - git clone https://github.com/phillyfan1138/FangOost
-  - git clone https://github.com/phillyfan1138/CharacteristicFunctions
-  - cd FFTOptionPricing 
+  - ps: cd ..
+  - ps: git clone https://github.com/phillyfan1138/FunctionalUtilities
+  - ps: git clone https://github.com/phillyfan1138/RungeKutta
+  - ps: git clone https://github.com/phillyfan1138/FangOost
+  - ps: git clone https://github.com/phillyfan1138/CharacteristicFunctions
+  - ps: cd FFTOptionPricing 
 #-"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x64
 
+before_build:
+  #- cmd: cd C:\projects\dart
+  - cmd: make
 
-test_script:
- - make
 
 build: off
+
+
+test: off
+
+
+
+
