@@ -1,6 +1,14 @@
-[![Build Status](https://travis-ci.org/phillyfan1138/FFTOptionPricing.svg?branch=master)](https://travis-ci.org/phillyfan1138/FFTOptionPricing)
-[![Build status](https://ci.appveyor.com/api/projects/status/i7agjioyxflo0xgq?svg=true)](https://ci.appveyor.com/project/phillyfan1138/fftoptionpricing)
-[![codecov](https://codecov.io/gh/phillyfan1138/FFTOptionPricing/branch/master/graph/badge.svg)](https://codecov.io/gh/phillyfan1138/FFTOptionPricing)
+| [Linux][lin-link] | [Windows][win-link] | [Coveralls][cov-link] |
+| :---------------: | :-----------------: | :-------------------: |
+| ![lin-badge]      | ![win-badge]        | ![cov-badge]          |
+
+[lin-badge]: https://travis-ci.org/phillyfan1138/FFTOptionPricing.svg?branch=master "Travis build status"
+[lin-link]:  https://travis-ci.org/phillyfan1138/FFTOptionPricing "Travis build status"
+[win-badge]: https://ci.appveyor.com/api/projects/status/i7agjioyxflo0xgq?svg=true "AppVeyor build status"
+[win-link]:  https://ci.appveyor.com/project/phillyfan1138/fftoptionpricing "AppVeyor build status"
+[cov-badge]: https://codecov.io/gh/phillyfan1138/FFTOptionPricing/branch/master/graph/badge.svg
+[cov-link]:  https://codecov.io/gh/phillyfan1138/FFTOptionPricing
+
 
 
 ##FFT Option Pricing
