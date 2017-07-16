@@ -1,6 +1,6 @@
 #!/bin/bash
 git pull origin master
-git checkout 2531e1bbbcf30889aacb82377868b02520f92da9
+git checkout a7784c2236544c55fdf4412f7b0f0719381215c6
 function cloneAndCheckout {
 	cd ..
 	if [ -d "$1" ]; then
