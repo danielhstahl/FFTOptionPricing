@@ -151,6 +151,28 @@ namespace optionprice{
         });
     }
     
+
+    /**For Fang Oost (defined in the paper)*/
+    template<typename A, typename B, typename C, typename D, typename U>
+    auto chiK(const A& a, const B& b, const C& c, const D& d, const U& u){
+        auto iterS=[&](const auto& x){
+            return u*(x-a);
+        };
+        //auto coef=1.0/;
+        auto expD=exp(d);
+        auto expC=exp(c);
+        return (cos(iterS(d))*expD-cos(iterS(c))*expC+u*sin(iterS(d))*expD-u*sin(iterS(c))*expC)/(1.0+u*u);
+    }
+    /**For Fang Oost (defined in the paper)*/
+    template<typename A, typename B, typename C, typename D, typename U>
+    auto phiK(const A& a, const B& b, const C& c, const D& d, const U& u){
+        auto iterS=[&](const auto& x){
+            return u*(x-a);
+        };
+        return u==0.0?d-c:(sin(iterS(d))-sin(iterS(c)))/u;
+    }
+        
+
     /**
         Fang Oosterlee Approach for a PUT (better accuracy than a call...use put call parity to get back put)
         returns in log domain
@@ -175,23 +197,6 @@ namespace optionprice{
         const Number& discount,
         CF&& cf
      ){
-        //defined in fang oosterlee
-        auto chiK=[](const auto& a, const auto& b, const auto& c, const auto& d, const auto& u){
-            auto iterS=[&](const auto& x){
-                return u*(x-a);
-            };
-            //auto coef=1.0/;
-            auto expD=exp(d);
-            auto expC=exp(c);
-            return (cos(iterS(d))*expD-cos(iterS(c))*expC+u*sin(iterS(d))*expD-u*sin(iterS(c))*expC)/(1.0+u*u);
-        };
-        //defined in fang oosterlee
-        auto phiK=[](const auto& a, const auto& b, const auto& c, const auto& d, const auto& u){
-            auto iterS=[&](const auto& x){
-                return u*(x-a);
-            };
-            return u==0.0?d-c:(sin(iterS(d))-sin(iterS(c)))/u;
-        };
         return fangoost::computeExpectation(numXSteps, numUSteps, xMin, xMax, cf, [&](const auto& u, const auto& x){
             return discount*K*(phiK(xMin, xMax, xMin, 0.0, u)-chiK(xMin, xMax, xMin, 0.0, u));
         });
