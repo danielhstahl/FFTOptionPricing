@@ -81,7 +81,7 @@ namespace optionprice{
         });
     }
     /**
-    Used by FangOosterlee
+    Helper function for Fang Oosterlee
     @xMin minimum X
     @xMax maximum X
     @K Strike price
@@ -97,30 +97,30 @@ namespace optionprice{
     }
 
     template<typename Index, typename Number>
-    auto getKAtIndex(const Number& xMin, const Number& dK, const Number& S0, const Index& index){
+    auto getFangOostKAtIndex(const Number& xMin, const Number& dK, const Number& S0, const Index& index){
         return S0*exp(-fangoost::getX(xMin, dK, index));
     }
-
+    /**helper function for computing strike vector for 
+    testing purposes.  Converts x back to strike*/
     template<typename Index, typename Number>
     auto getFangOostStrike(const Number& xMin, const Number& xMax, const Number& S0, const Index& numX){
         auto dx=fangoost::computeDX(numX, xMin, xMax);
-        //auto x=log(S0);
         return futilities::for_each_parallel(0, numX, [&](const auto& index){
             //the exponent is negative because x=log(S0/k)->k=s0*exp(-x)
-            return getKAtIndex(xMin, dx, S0, index);
+            return getFangOostKAtIndex(xMin, dx, S0, index);
         });
     }
-
+    /**This function takes strikes and converts them
+    into a vector in the x domain.  Intriguinely, I 
+    don't have to sort the result...*/
     template< typename Array, typename Number>
     auto getXFromK(const Number& S0, const Array& K){
-        auto x=futilities::for_each_parallel_copy(
+        return futilities::for_each_parallel_copy(
             K, 
             [&](const auto& val, const auto& index){
                 return log(S0/val);
             }
         );
-        std::sort(x.begin(), x.end());
-        return x;
     }
 
 
@@ -194,7 +194,6 @@ namespace optionprice{
         auto iterS=[&](const auto& x){
             return u*(x-a);
         };
-        //auto coef=1.0/;
         auto expD=exp(d);
         auto expC=exp(c);
         return (cos(iterS(d))*expD-cos(iterS(c))*expC+u*sin(iterS(d))*expD-u*sin(iterS(c))*expC)/(1.0+u*u);
@@ -209,16 +208,27 @@ namespace optionprice{
     }
         
     /**
-        Fang Oosterlee Approach for an option using Put as the main payoff (better accuracy than a call...use put call parity to get back put)
+        Fang Oosterlee Approach for an option using Put as the main payoff (better accuracy than a call...use put call parity to get back put).
+        Note that Fang Oosterlee's approach works well for a smaller 
+        of discrete strike prices such as those in the market.  The 
+        constraint is that the smallest and largest values in the x domain
+        must be relatively far from the middle values.  This can be 
+        "simulated" by adding small and large "K" synthetically.  Due to
+        the fact that Fang Oosterlee is able to handle this well, the 
+        function takes a vector of strike prices with no requirement that
+        the strike prices be equidistant.  All that is required is that
+        they are sorted smallest to largest.
+
         returns in log domain
         http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
-        @numSteps Discrete steps in X domain
-        @xmin minimum X (in log asset space around the strike)
-        @xmax maximum X (in log asset space around the strike)
-        @discount constant which is used for discounting
-        @payoff payoff function which takes the log result.  
+        @xValues x values derived from strikes
+        @numUSteps number of steps in the complex domain (independent 
+        of number of x steps)
+        @mOutput a function which determines whether the output is a 
+        call or a put.  
         @CF characteristic function of log x around the strike
-        @returns vector of prices corresponding with the assets given in getFangOostUnderlying
+        @returns vector of prices corresponding with the strikes 
+        provided by FangOostCall or FangOostPut
     */
     template<typename Index, typename Array,  typename CF, typename OutputManipulator>
     auto FangOostGeneric(
@@ -228,8 +238,8 @@ namespace optionprice{
         CF&& cf
      ){
          //x goes from log(S0/kmin) to log(S0/kmax)
-        auto xMin=*xValues.begin();
-        auto xMax=*xValues.end();
+        auto xMin=xValues.front();
+        auto xMax=xValues.back();
         return futilities::for_each_parallel(
             fangoost::computeExpectationVector(
                 xValues, numUSteps, cf, 
@@ -245,29 +255,22 @@ namespace optionprice{
 
     /**
         Fang Oosterlee Approach for a PUT (better accuracy than a call...use put call parity to get back put)
-        returns in log domain
         http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
-        @numSteps Discrete steps in X domain
-        @xmin minimum X (in log asset space around the strike)
-        @xmax maximum X (in log asset space around the strike)
+        @S0 value of stock
+        @K stl container containing strikes to be priced
+        @numUSteps number of steps in complex domain
         @discount constant which is used for discounting
-        @payoff payoff function which takes the log result.  
         @CF characteristic function of log x around the strike
-        @returns vector of prices corresponding with the assets given in getFangOostUnderlying
+        @returns vector of put prices corresponding with the K
     */
     template<typename Index, typename Array, typename Number,  typename CF>
     auto FangOostPut(
         const Number& S0,
         const Array& K,
-        //const Index& numXSteps, 
-        const Index& numUSteps, 
-        //const Number& xMin, 
-        //const Number& xMax,       
+        const Index& numUSteps,     
         const Number& discount,
         CF&& cf
      ){
-         
-        //auto dK=fangoost::computeDX(numXSteps, xMin, xMax);
         return FangOostGeneric(
             getXFromK(S0, K),
             numUSteps,  
@@ -277,6 +280,16 @@ namespace optionprice{
             cf
         );
     }
+    /**
+        Fang Oosterlee Approach for a call 
+        http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
+        @S0 value of stock
+        @K stl container containing strikes to be priced
+        @numUSteps number of steps in complex domain
+        @discount constant which is used for discounting
+        @CF characteristic function of log x around the strike
+        @returns vector of call prices corresponding with the K
+    */
     template<typename Index, typename Array, typename Number, typename CF>
     auto FangOostCall(
         const Number& S0,
@@ -285,7 +298,6 @@ namespace optionprice{
         const Number& discount,
         CF&& cf
      ){
-        //auto dK=fangoost::computeDX(numXSteps, xMin, xMax);
         return FangOostGeneric(
             getXFromK(S0, K),
             numUSteps, 
@@ -295,40 +307,6 @@ namespace optionprice{
             cf
         );
     }
-    /**
-        Fang Oosterlee Approach for a PUT (better accuracy than a call...use put call parity to get back put)
-        returns in log domain
-        respect to S, not K
-        http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
-        @numSteps Discrete steps in X domain
-        @xmax maximum X (in log asset space around the strike)
-        @discount constant which is used for discounting
-        @payoff payoff function which takes the log result.  
-        @CF characteristic function of log x around the strike
-        @returns vector of prices corresponding with the assets given in getFangOostUnderlying
-    */
-    template<typename Index, typename Number,  typename CF>
-    auto FangOostPut(
-        const Number& S0,
-        const Index& numXSteps, 
-        const Index& numUSteps, 
-        const Number& xMax,         
-        const Number& discount,
-        CF&& cf
-     ){
-        return FangOostPut(S0, numXSteps, numUSteps, -xMax, xMax, discount, cf);
-     }
-    template<typename Index, typename Number,  typename CF>
-    auto FangOostCall(
-        const Number& S0,
-        const Index& numXSteps, 
-        const Index& numUSteps, 
-        const Number& xMax,         
-        const Number& discount,
-        CF&& cf
-     ){
-        return FangOostCall(S0, numXSteps, numUSteps, -xMax, xMax, discount, cf);
-     }
     
     /**
     Used for Carr-Madan call option http://engineering.nyu.edu/files/jcfpub.pdf
