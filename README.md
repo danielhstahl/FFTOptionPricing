@@ -16,3 +16,9 @@
 This repository does Carr Madan, Fourier Space Time Stepping Algorithms, and Fang Oosterlee pricing from <a href="http://engineering.nyu.edu/files/jcfpub.pdf">Carr and Madan</a>, <a href="https://tspace.library.utoronto.ca/bitstream/1807/19300/1/Surkov_Vladimir_200911_PhD_Thesis.pdf">Sukov Vladimir</a>, and <a href="http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf">Fang Oosterlee</a>. 
 Requires my <a href="https://github.com/phillyfan1138/FunctionalUtilities">Functional Utilities</a>, my <a href="https://github.com/phillyfan1138/CharacteristicFunctions">Characteristic Functions</a>, my <a href="https://github.com/phillyfan1138/FangOost">Fang Oosterlee </a>, and my <a href="https://github.com/phillyfan1138/RungeKutta">Runge Kutta</a> library.  
 
+Benefits to FSTS: It only requires a CF and a payoff.  No further manipulations necessary.  Can also price American options.  Disadvantages: slower.  Roughly twice as slow as Carr and Madan for Europeans.  Prices in log asset instead of log strike; so not as easy to price all strikes for a given stock price.
+
+Benefits to Carr Madan: Ubiquitous. Prices in log strike.  Disadvantages: requires algebraic manipulations for each payoff.  Does not converge quickly.
+
+Benefits to Fang Oosterlee:  Fast convergence.  Disadvantages: requires algebraic maniuplations for each payoff.   Prices in log asset instead of log strike; so not as easy to price all strikes for a given stock price.
+
