@@ -3,6 +3,7 @@
 #include "FunctionalUtilities.h"
 #include "RungeKutta.h"
 #include "OptionPricing.h"
+#include <chrono>
 #include "fft.h"
 #include <iostream>
 #include "CharacteristicFunctions.h"
@@ -43,11 +44,15 @@ TEST_CASE("FSTS", "OptionPricing"){
     };
     int numX=pow(2, 10);
     double xmax=5.0;
+    auto started = std::chrono::high_resolution_clock::now();
     auto myOptionsPrice=optionprice::FSTS(numX, xmax, 
         discount, 
         [&](const auto& logR){return payoff(K, logR, K);}, 
         BSCF
     );
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+
     auto myXDomain=optionprice::getFSTSUnderlying(-xmax, xmax, K, numX);
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
@@ -59,11 +64,10 @@ TEST_CASE("FangOosterlee", "OptionPricing"){
     auto r=.05;
     auto sig=.3;
     auto T=1.0;
-    auto K=50.0; 
+    auto S0=50.0; 
     //auto initValue=50.0;
     
 
-    
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
@@ -86,17 +90,21 @@ TEST_CASE("FangOosterlee", "OptionPricing"){
     };
     double xmax=5.0;
     int numX=pow(2, 10);
-    int numU=256;
-    auto myXDomain=optionprice::getFangOostUnderlying(-xmax, xmax, K, numX);
+    int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
+    //auto myXDomain=optionprice::getFangOostUnderlying(-xmax, xmax, K, numX);
+    auto KArray=optionprice::getFangOostStrike(-xmax, xmax, S0, numX);
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myOptionsPrice=optionprice::FangOostPut(S0, KArray, numU, discount, BSCF);
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
 
-    auto myOptionsPrice=optionprice::FangOost(numX, numU, xmax,K, discount, BSCF);
-    
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){ 
-        auto put=BS(myXDomain[i], discount, K, sig*sqrt(T))+K*discount-myXDomain[i];
-        //std::cout<<myOptionsPrice[i+1]<<", "<<myXDomain[i+1]<<", "<<put<<", "<<put/myOptionsPrice[i+1]<<std::endl;
-        REQUIRE(myOptionsPrice[i]==Approx(put).epsilon(.0001));
+        auto analyticOption=BS(S0, discount, KArray[i+1], sig*sqrt(T))+KArray[i]*discount-S0;
+        //auto analyticOption=BS(S0, discount, KArray[i], sig*sqrt(T));
+        std::cout<<myOptionsPrice[i+1]<<", "<<KArray[i+1]<<", "<<analyticOption<<", "<<analyticOption/myOptionsPrice[i+1]<<std::endl;
+        //REQUIRE(myOptionsPrice[i]==Approx(put).epsilon(.0001));
     }
 }
 
@@ -104,7 +112,7 @@ TEST_CASE("CarrMadan", "[OptionPricing]"){
     auto r=.05;
     auto sig=.3;
     auto T=1.0;
-    auto S0=5.0;
+    auto S0=50.0;
     auto discount=exp(-r*T);
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
@@ -126,12 +134,15 @@ TEST_CASE("CarrMadan", "[OptionPricing]"){
     };
     int numX=pow(2, 10);
     auto ada=.25;
-    auto myOptionsPrice=optionprice::CarrMadan(numX,  
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myOptionsPrice=optionprice::CarrMadanCall(numX,  
         ada,
         S0, 
         discount, 
-        [&](const auto& v, const auto& alpha){return optionprice::CallAug(v, alpha, BSCF);}
+        BSCF
     );
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "Carr Madan time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
     auto b=optionprice::getMaxK(ada);
     auto lambda=optionprice::getLambda(numX, b);
     auto myXDomain=optionprice::getCarrMadanStrikes(ada, S0, numX);

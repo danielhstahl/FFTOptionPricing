@@ -2,6 +2,7 @@
 #define OPTOINPRICING_H
 #include <complex>
 #include <vector>
+#include <algorithm>
 #include "FunctionalUtilities.h"
 #include "CharacteristicFunctions.h"
 #include "FangOost.h"
@@ -85,7 +86,7 @@ namespace optionprice{
     @xMax maximum X
     @K Strike price
     @numX number of nodes
-    @returns vector of stock or asset prices.  Note that this is different from Carr Madan which prices in terms of a vector of strike prices
+    @returns vector of stock or asset prices.  Note that this is different from Carr Madan which prices in terms of a vector of strike prices.  However, this can also price per strike; see getFangOostStrike
     */
     template<typename Index, typename Number>
     auto getFangOostUnderlying(const Number& xMin, const Number& xMax, const Number& K, const Index& numX){
@@ -94,8 +95,41 @@ namespace optionprice{
             return K*exp(fangoost::getX(xMin, dx, index));
         });
     }
+
+    template<typename Index, typename Number>
+    auto getKAtIndex(const Number& xMin, const Number& dK, const Number& S0, const Index& index){
+        return S0*exp(-fangoost::getX(xMin, dK, index));
+    }
+
+    template<typename Index, typename Number>
+    auto getFangOostStrike(const Number& xMin, const Number& xMax, const Number& S0, const Index& numX){
+        auto dx=fangoost::computeDX(numX, xMin, xMax);
+        //auto x=log(S0);
+        return futilities::for_each_parallel(0, numX, [&](const auto& index){
+            //the exponent is negative because x=log(S0/k)->k=s0*exp(-x)
+            return getKAtIndex(xMin, dx, S0, index);
+        });
+    }
+
+    template< typename Array, typename Number>
+    auto getXFromK(const Number& S0, const Array& K){
+        auto x=futilities::for_each_parallel_copy(
+            K, 
+            [&](const auto& val, const auto& index){
+                return log(S0/val);
+            }
+        );
+        std::sort(x.begin(), x.end());
+        return x;
+    }
+
+
+    template<typename Index, typename Number>
+    auto getCarrMadanKAtIndex(const Number& b, const Number& lambda, const Number& S0, const Index& index){
+        return S0*exp(optionprice::getDomain(-b, lambda, index));
+    }
     /**
-    Used by FangOosterlee
+    Used by CarrMadan
     @ada distance between nodes in the U domain
     @S0 stock or asset price
     @numX number of nodes
@@ -106,7 +140,9 @@ namespace optionprice{
         auto b=getMaxK(ada);
         auto lambda=getLambda(numX, b);
         return futilities::for_each_parallel(0, numX, [&](const auto& index){
-            return S0*exp(optionprice::getDomain(-b, lambda, index));
+            return getCarrMadanKAtIndex(b, lambda, S0, index);
+            
+            //S0*exp(optionprice::getDomain(-b, lambda, index));
         });
     }
 
@@ -172,11 +208,9 @@ namespace optionprice{
         return u==0.0?d-c:(sin(iterS(d))-sin(iterS(c)))/u;
     }
         
-
     /**
-        Fang Oosterlee Approach for a PUT (better accuracy than a call...use put call parity to get back put)
+        Fang Oosterlee Approach for an option using Put as the main payoff (better accuracy than a call...use put call parity to get back put)
         returns in log domain
-        respect to S, not K
         http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
         @numSteps Discrete steps in X domain
         @xmin minimum X (in log asset space around the strike)
@@ -186,20 +220,80 @@ namespace optionprice{
         @CF characteristic function of log x around the strike
         @returns vector of prices corresponding with the assets given in getFangOostUnderlying
     */
-    template<typename Index, typename Number,  typename CF>
-    auto FangOost(
-        const Index& numXSteps, 
-        //const KArray& K, 
+    template<typename Index, typename Array,  typename CF, typename OutputManipulator>
+    auto FangOostGeneric(
+        Array&& xValues,
         const Index& numUSteps, 
-        const Number& xMin, 
-        const Number& xMax,      
-        const Number& K,      
+        OutputManipulator&& mOutput,
+        CF&& cf
+     ){
+         //x goes from log(S0/kmin) to log(S0/kmax)
+        auto xMin=*xValues.begin();
+        auto xMax=*xValues.end();
+        return futilities::for_each_parallel(
+            fangoost::computeExpectationVector(
+                xValues, numUSteps, cf, 
+                [&](const auto& u, const auto& x){
+                    return phiK(xMin, xMax, xMin, 0.0, u)-chiK(xMin, xMax, xMin, 0.0, u);//used for put
+                }
+            ), 
+            mOutput
+        );
+    }
+
+    
+
+    /**
+        Fang Oosterlee Approach for a PUT (better accuracy than a call...use put call parity to get back put)
+        returns in log domain
+        http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
+        @numSteps Discrete steps in X domain
+        @xmin minimum X (in log asset space around the strike)
+        @xmax maximum X (in log asset space around the strike)
+        @discount constant which is used for discounting
+        @payoff payoff function which takes the log result.  
+        @CF characteristic function of log x around the strike
+        @returns vector of prices corresponding with the assets given in getFangOostUnderlying
+    */
+    template<typename Index, typename Array, typename Number,  typename CF>
+    auto FangOostPut(
+        const Number& S0,
+        const Array& K,
+        //const Index& numXSteps, 
+        const Index& numUSteps, 
+        //const Number& xMin, 
+        //const Number& xMax,       
         const Number& discount,
         CF&& cf
      ){
-        return fangoost::computeExpectation(numXSteps, numUSteps, xMin, xMax, cf, [&](const auto& u, const auto& x){
-            return discount*K*(phiK(xMin, xMax, xMin, 0.0, u)-chiK(xMin, xMax, xMin, 0.0, u));
-        });
+         
+        //auto dK=fangoost::computeDX(numXSteps, xMin, xMax);
+        return FangOostGeneric(
+            getXFromK(S0, K),
+            numUSteps,  
+            [&](const auto& val, const auto& index){
+                return val*discount*K[index];
+            }, 
+            cf
+        );
+    }
+    template<typename Index, typename Array, typename Number, typename CF>
+    auto FangOostCall(
+        const Number& S0,
+        const Array& K,
+        const Index& numUSteps,         
+        const Number& discount,
+        CF&& cf
+     ){
+        //auto dK=fangoost::computeDX(numXSteps, xMin, xMax);
+        return FangOostGeneric(
+            getXFromK(S0, K),
+            numUSteps, 
+            [&](const auto& val, const auto& index){
+                return (val-1.0)*discount*K[index]+S0;
+            }, 
+            cf
+        );
     }
     /**
         Fang Oosterlee Approach for a PUT (better accuracy than a call...use put call parity to get back put)
@@ -214,15 +308,26 @@ namespace optionprice{
         @returns vector of prices corresponding with the assets given in getFangOostUnderlying
     */
     template<typename Index, typename Number,  typename CF>
-    auto FangOost(
+    auto FangOostPut(
+        const Number& S0,
         const Index& numXSteps, 
         const Index& numUSteps, 
-        const Number& xMax,     
-        const Number& K,      
+        const Number& xMax,         
         const Number& discount,
         CF&& cf
      ){
-        return FangOost(numXSteps, numUSteps, -xMax, xMax, K, discount, cf);
+        return FangOostPut(S0, numXSteps, numUSteps, -xMax, xMax, discount, cf);
+     }
+    template<typename Index, typename Number,  typename CF>
+    auto FangOostCall(
+        const Number& S0,
+        const Index& numXSteps, 
+        const Index& numUSteps, 
+        const Number& xMax,         
+        const Number& discount,
+        CF&& cf
+     ){
+        return FangOostCall(S0, numXSteps, numUSteps, -xMax, xMax, discount, cf);
      }
     
     /**
@@ -235,7 +340,7 @@ namespace optionprice{
     }
     
     /**
-        Carr Madan Approach for a CALL 
+        Carr Madan Approach for using a CALL as the fundamental asset
         respect to K not S
         http://engineering.nyu.edu/files/jcfpub.pdf
         @numSteps Discrete steps in X domain
@@ -243,16 +348,18 @@ namespace optionprice{
         @alpha a variable used to keep integrand from 0
         @S0 asset value
         @discount constant which is used for discounting
+        @mOutput function of fundamental asset.  For a call, this just returns the value
         @CF characteristic function of log x around the strike
         @returns vector of prices corresponding with the strikes given in getCarrMadanStrikes
     */
-    template<typename Index, typename Number,  typename CF>
-    auto CarrMadan(
+    template<typename Index, typename Number,  typename CF, typename OutputManipulator>
+    auto CarrMadanGeneric(
         const Index& numSteps, 
         const Number& ada, 
         const Number& alpha, 
         const Number& S0, 
         const Number& discount, 
+        OutputManipulator&& mOutput,
         CF&& augCF
     ){
         auto b=getMaxK(ada);
@@ -267,9 +374,47 @@ namespace optionprice{
             )
         );
         return futilities::for_each_parallel(0, numSteps, [&](const auto& index){
-            return S0*cmplVector[index].real()*exp(-alpha*getDomain(-b, lambda, index))*ada/(M_PI*3.0);
+            return mOutput(S0*cmplVector[index].real()*exp(-alpha*getDomain(-b, lambda, index))*ada/(M_PI*3.0), index);
         });
     }
+
+    template<typename Index, typename Number,  typename CF>
+    auto CarrMadanCall(
+        const Index& numSteps, 
+        const Number& ada, 
+        const Number& alpha, 
+        const Number& S0, 
+        const Number& discount, 
+        CF&& cf
+    ){
+        return CarrMadanGeneric(numSteps, ada, alpha, S0, discount, 
+        [&](const auto& val, const auto& index){
+            return val;
+        }, [&](const auto& v, const auto& alpha){
+            return optionprice::CallAug(v, alpha, cf);
+        });
+        
+    }
+    template<typename Index, typename Number,  typename CF>
+    auto CarrMadanPut(
+        const Index& numSteps, 
+        const Number& ada, 
+        const Number& alpha, 
+        const Number& S0, 
+        const Number& discount, 
+        CF&& cf
+    ){
+        auto b=getMaxK(ada);
+        auto lambda=getLambda(numSteps, b);
+        return CarrMadanGeneric(numSteps, ada, alpha, S0, discount, 
+        [&](const auto& val, const auto& index){
+            return val-S0+getCarrMadanKAtIndex(b, lambda, S0, index)*discount;
+        }, [&](const auto& v, const auto& alpha){
+            return optionprice::CallAug(v, alpha, cf);
+        });
+    }
+    
+
     /**
         Carr Madan Approach for a CALL 
         respect to K not S
@@ -282,7 +427,7 @@ namespace optionprice{
         @returns vector of prices corresponding with the strikes given in getCarrMadanStrikes
     */
     template<typename Index, typename Number,  typename CF>
-    auto CarrMadan(
+    auto CarrMadanCall(
         const Index& numSteps, 
         const Number& ada, 
         const Number& S0,
@@ -290,7 +435,29 @@ namespace optionprice{
         CF&& augCF
     ){
         auto alpha=1.5;
-        return CarrMadan(numSteps, ada, alpha, S0, discount, augCF);
+        return CarrMadanCall(numSteps, ada, alpha, S0, discount, augCF);
+    }
+    /**
+        Carr Madan Approach for a Put 
+        respect to K not S
+        http://engineering.nyu.edu/files/jcfpub.pdf
+        @numSteps Discrete steps in X domain
+        @ada distance between nodes in U domain
+        @S0 asset value
+        @discount constant which is used for discounting
+        @CF characteristic function of log x around the strike
+        @returns vector of prices corresponding with the strikes given in getCarrMadanStrikes
+    */
+    template<typename Index, typename Number,  typename CF>
+    auto CarrMadanPut(
+        const Index& numSteps, 
+        const Number& ada, 
+        const Number& S0,
+        const Number& discount, 
+        CF&& augCF
+    ){
+        auto alpha=1.5;
+        return CarrMadanPut(numSteps, ada, alpha, S0, discount, augCF);
     }
 }
 

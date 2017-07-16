@@ -20,5 +20,5 @@ Benefits to FSTS: It only requires a CF and a payoff.  No further manipulations 
 
 Benefits to Carr Madan: Ubiquitous. Prices in log strike.  Disadvantages: requires algebraic manipulations for each payoff.  Does not converge quickly.
 
-Benefits to Fang Oosterlee:  Fast convergence.  Disadvantages: requires algebraic maniuplations for each payoff.   Prices in log asset instead of log strike; so not as easy to price all strikes for a given stock price.
+Benefits to Fang Oosterlee:  Fast convergence in u.  U and X are seperate and so can price only the options available in the market without interpolation.  Prices in either asset or strike.  Disadvantages: requires algebraic maniuplations for each payoff.   
 
