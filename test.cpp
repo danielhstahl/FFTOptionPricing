@@ -153,6 +153,57 @@ TEST_CASE("FangOosterleeCall", "[OptionPricing]"){
         REQUIRE(myOptionsPrice[i]==Approx(analyticOption).epsilon(.0001));
     }
 }
+
+
+
+TEST_CASE("FangOosterleeCallFewK", "[OptionPricing]"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto S0=50.0; 
+   
+
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=exp(-r*T);
+
+    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
+        if(sigma>0){
+            double s=sqrt(2.0);
+            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
+            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
+        }
+        else{
+            if(S0>k){
+                return (S0-k)*discount;
+            }
+            else{
+                return 0.0;
+            }
+        } 
+    };
+    int numU=64; //This should run extremely quickly since only have 5 strikes
+    auto KArray=std::vector<double>(5, 0);
+    KArray[4]=.3;
+    KArray[3]=40;//strike 40
+    KArray[2]=50;//strike 50
+    KArray[1]=60;//strike 60
+    KArray[0]=7500;
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, BSCF);
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+    for(int i=1;i<4; ++i){ 
+        auto analyticOption=BS(S0, discount, KArray[i], sig*sqrt(T));
+        REQUIRE(myOptionsPrice[i]==Approx(analyticOption).epsilon(.0001));
+    }
+}
+
+
+
+
+
 TEST_CASE("FangOosterleePut", "[OptionPricing]"){
     auto r=.05;
     auto sig=.3;

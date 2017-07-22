@@ -257,7 +257,7 @@ namespace optionprice{
         Fang Oosterlee Approach for a PUT (better accuracy than a call...use put call parity to get back put)
         http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
         @S0 value of stock
-        @K stl container containing strikes to be priced
+        @K stl container containing strikes to be priced..must be in DESCENDING order
         @numUSteps number of steps in complex domain
         @discount constant which is used for discounting
         @CF characteristic function of log x around the strike
@@ -284,7 +284,7 @@ namespace optionprice{
         Fang Oosterlee Approach for a call 
         http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
         @S0 value of stock
-        @K stl container containing strikes to be priced
+        @K stl container containing strikes to be priced..must be in DESCENDING order
         @numUSteps number of steps in complex domain
         @discount constant which is used for discounting
         @CF characteristic function of log x around the strike
