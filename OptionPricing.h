@@ -217,7 +217,7 @@ namespace optionprice{
         the fact that Fang Oosterlee is able to handle this well, the 
         function takes a vector of strike prices with no requirement that
         the strike prices be equidistant.  All that is required is that
-        they are sorted smallest to largest.
+        they are sorted largest to smallest.
 
         returns in log domain
         http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
