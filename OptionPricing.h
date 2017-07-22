@@ -199,12 +199,12 @@ namespace optionprice{
         return (cos(iterS(d))*expD-cos(iterS(c))*expC+u*sin(iterS(d))*expD-u*sin(iterS(c))*expC)/(1.0+u*u);
     }
     /**For Fang Oost (defined in the paper)*/
-    template<typename A, typename B, typename C, typename D, typename U>
-    auto phiK(const A& a, const B& b, const C& c, const D& d, const U& u){
+    template<typename A, typename B, typename C, typename D, typename U, typename Index>
+    auto phiK(const A& a, const B& b, const C& c, const D& d, const U& u, const Index& k){
         auto iterS=[&](const auto& x){
             return u*(x-a);
         };
-        return u==0.0?d-c:(sin(iterS(d))-sin(iterS(c)))/u;
+        return k==0?d-c:(sin(iterS(d))-sin(iterS(c)))/u;
     }
         
     /**
@@ -241,10 +241,10 @@ namespace optionprice{
         auto xMin=xValues.front();
         auto xMax=xValues.back();
         return futilities::for_each_parallel(
-            fangoost::computeExpectationVector(
+            fangoost::computeExpectationVectorLevy(
                 xValues, numUSteps, cf, 
-                [&](const auto& u, const auto& x){
-                    return phiK(xMin, xMax, xMin, 0.0, u)-chiK(xMin, xMax, xMin, 0.0, u);//used for put
+                [&](const auto& u, const auto& x, const auto& k){
+                    return phiK(xMin, xMax, xMin, 0.0, u, k)-chiK(xMin, xMax, xMin, 0.0, u);//used for put
                 }
             ), 
             mOutput
