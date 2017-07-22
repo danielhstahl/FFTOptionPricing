@@ -1,5 +1,5 @@
 #ifndef OPTIONPRICING_H
-#define OPTOINPRICING_H
+#define OPTIONPRICING_H
 #include <complex>
 #include <vector>
 #include <algorithm>
@@ -313,7 +313,6 @@ namespace optionprice{
     */
     template<typename Number1, typename Number2,  typename CF>
     auto CallAug(const Number1& v, const Number2& alpha, CF& cf){ //used for Carr-Madan approach...v is typically complex
-        //auto u=;
         return cf(v+(alpha+1.0))/(alpha*alpha+alpha+v*v+(2*alpha+1)*v);
     }
     
