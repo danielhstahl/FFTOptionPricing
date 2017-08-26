@@ -1,6 +1,6 @@
 #!/bin/bash
 git pull origin master
-git checkout a7784c2236544c55fdf4412f7b0f0719381215c6
+git checkout b346f6968b36d0837e9b3bb1740b5d7a1d4854b3
 function cloneAndCheckout {
 	cd ..
 	if [ -d "$1" ]; then
@@ -16,11 +16,11 @@ function cloneAndCheckout {
 	cd FFTOptionPricing
 }
 
-cloneAndCheckout FunctionalUtilities 33da1e6317022d0ccad5bb116bab6e1d4784439e
+cloneAndCheckout FunctionalUtilities 20bb2555ccb00539496860bf598eb466d348c043
 
 cloneAndCheckout CharacteristicFunctions 0dfefb3dc845d40ae94b70edb23cf6301bd6df18
 
-cloneAndCheckout FangOost 09419c1388b70ecf69753f3e37f6276c3653e56f
+cloneAndCheckout FangOost 5919d52d5a59b317878b61115acd6cda3a91b97f
 
 cloneAndCheckout RungeKutta 6326974b245199852a1f00fccb4b677180ffc6d4
 
