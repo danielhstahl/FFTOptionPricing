@@ -22,3 +22,7 @@ Benefits to Carr Madan: Ubiquitous. Prices in log strike.  Disadvantages: requir
 
 Benefits to Fang Oosterlee:  Fast convergence in u.  U and X are separate and so can price only the options available in the market without interpolation.  Prices in either asset or strike.  Disadvantages: requires algebraic manipulations for each payoff.   For a given size of "X", tends to be slower than Carr Madan.  Benefit is that "X" can be whatever the market provides. 
 
+## Examples
+
+See the [tests](./test.cpp) for examples on how to use each of these algorithms.
+
