@@ -7,6 +7,8 @@
 #include "fft.h"
 #include <iostream>
 #include "CharacteristicFunctions.h"
+//temporary
+#include "CFDistUtilities.h"
 
 TEST_CASE("FSTSCall", "OptionPricing"){
     auto r=.05;
@@ -342,3 +344,62 @@ TEST_CASE("CarrMadanPut", "[OptionPricing]"){
 
 
 
+
+
+
+//auto computeCDF(const Index& numXDiscrete, const Index& numU, const Number& xMin, const Number& xMax, CF&& cf){
+
+/*TEST_CASE("FangOosterleeCallCGMY", "[OptionPricing]"){
+    auto r=.06;
+    auto sig=0.0;
+    auto T=.25;
+    auto S0=90.0;  
+    auto C=16.97;
+    auto G=7.08;
+    auto M=29.97;
+    auto Y=0.6442;
+    auto BSCF=[&](const auto& u){
+        return exp(chfunctions::cgmyLogRNCF(u, C, G, M, Y, sig, r)*T);
+        //return exp(chfunctions::cgmyLogCF(u, C, G, M, Y)*T);
+    };
+    int numX=256;
+    auto results= cfdistutilities::computeCDF(numX, 256, -5.0, 5.0, BSCF);
+    //int i=(int)numX*.3;
+    //int mxX=(int)numX*.7;
+    for(int i=0;i<numX; ++i){
+        std::cout<<results[i]<<std::endl;
+    }
+
+}
+*/
+
+TEST_CASE("FangOosterleeCallCGMY", "[OptionPricing]"){
+    //https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 19
+    //S K T r q σ C G M Y
+    //90 98 0.25 0.06 0.0 0.0 16.97 7.08 29.97 0.6442
+    auto KArray=std::vector<double>(3, 0);
+    KArray[2]=.3;
+    KArray[1]=98;//strike 40
+    KArray[0]=7500;
+
+    auto r=.06;
+    auto sig=0.0;
+    auto T=.25;
+    auto S0=90.0;  
+    auto C=16.97;
+    auto G=7.08;
+    auto M=29.97;
+    auto Y=0.6442;
+    auto discount=exp(-r*T);
+
+    auto BSCF=[&](const auto& u){
+        return exp(chfunctions::cgmyLogRNCF(u, C, G, M, Y, r, sig)*T);
+    };
+    
+    int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
+    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, BSCF);
+    auto myReference=16.212478;//https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 19
+    REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
+
+
+}
