@@ -1,4 +1,4 @@
-INCLUDES=-I ../FunctionalUtilities -I ../RungeKutta -I ../CharacteristicFunctions -I ../FangOost -I../cfdistutilities -I../GaussNewton -I../TupleUtilities -I../AutoDiff
+INCLUDES=-I ../FunctionalUtilities -I ../RungeKutta -I ../CharacteristicFunctions -I ../FangOost 
 GCCVAL=g++
 
 
