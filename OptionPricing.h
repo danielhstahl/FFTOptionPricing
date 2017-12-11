@@ -141,8 +141,6 @@ namespace optionprice{
         auto lambda=getLambda(numX, b);
         return futilities::for_each_parallel(0, numX, [&](const auto& index){
             return getCarrMadanKAtIndex(b, lambda, S0, index);
-            
-            //S0*exp(optionprice::getDomain(-b, lambda, index));
         });
     }
 
