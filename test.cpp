@@ -612,6 +612,7 @@ TEST_CASE("CarrMadanCGMY", "[OptionPricing]"){
 
 
 
+//correlation on diffusion only
 
 TEST_CASE("CarrMadanCGMYStochasticVol", "[OptionPricing]"){
     //https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 20
@@ -720,7 +721,7 @@ TEST_CASE("CarrMadanCGMYStochasticVolNoCorr", "[OptionPricing]"){
 
 }
 
-
+//correlation on diffusion only
 TEST_CASE("CarrMadanCGMYStochasticVolCallCorr", "[OptionPricing]"){
     //https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 20
     //S K T r q σ C G M Y
