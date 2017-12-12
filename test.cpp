@@ -627,23 +627,13 @@ TEST_CASE("CarrMadanCGMYPut", "[OptionPricing]"){
     auto a=.5;//long run tau of 1
     auto v0=1.05;
     auto adaV=.2;
-    auto rho=-.4;//leverage rho
+    auto rho=-1.0;//-.4;//leverage rho
     auto discount=exp(-r*T);
- 
     auto CFCorr=[&](const auto& u){
         return exp(r*T*u+chfunctions::cirLogMGF(
-            -chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, 0.0),
+            -chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, sig),
             a, 
-            kappa,
-            adaV,
-            T, 
-            v0
-        )+chfunctions::cirLogMGF(
-           -chfunctions::gaussLogCF(
-                u, -.5*sig*sig, sig
-            )*T,
-            a, 
-            kappa-adaV*rho*u,
+            kappa-adaV*rho*u*sig,
             adaV,
             T, 
             v0
@@ -688,11 +678,12 @@ TEST_CASE("CarrMadanCGMYPut", "[OptionPricing]"){
     auto b=optionprice::getMaxK(ada);
     auto lambda=optionprice::getLambda(numX, b);
     auto myXDomain=optionprice::getCarrMadanStrikes(ada, S0, numX);
-    auto myReferenceCorr=72.40972637;//I think this is right, but this is based solely off whether it makes logical sense
-    auto myReferenceStoch=75.0101015688;//I think this is right, but this is based solely off whether it makes logical sense
+    auto myReferenceCorr=74.9251;//I think this is right, but this is based solely off whether it makes logical sense
+    auto myReferenceStoch=75.0101;//I think this is right, but this is based solely off whether it makes logical sense
     auto myReferenceBase=72.9703833045;//I think this is right, but this is based solely off whether it makes logical sense
-
-
+    std::cout<<"corr: "<<myOptionsPriceCorr[numX/2]<<std::endl;
+    std::cout<<"stoch: "<<myOptionsPriceStoch[numX/2]<<std::endl;
+    std::cout<<"base: "<<myOptionsPriceBase[numX/2]<<std::endl;
     REQUIRE(myOptionsPriceCorr[numX/2]==Approx(myReferenceCorr).epsilon(.0001));
     REQUIRE(myOptionsPriceStoch[numX/2]==Approx(myReferenceStoch).epsilon(.0001));
     REQUIRE(myOptionsPriceBase[numX/2]==Approx(myReferenceBase).epsilon(.0001));
