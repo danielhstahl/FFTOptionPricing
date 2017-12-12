@@ -608,3 +608,221 @@ TEST_CASE("CarrMadanCGMY", "[OptionPricing]"){
     REQUIRE(myOptionsPrice[numX/2]==Approx(myReference).epsilon(.0001));
 
 }
+
+
+
+
+
+TEST_CASE("CarrMadanCGMYStochasticVol", "[OptionPricing]"){
+    //https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 20
+    //S K T r q σ C G M Y
+    //500 500 0.25 0.4 0.0 0.2 1.0 1.4 2.5 1.4
+    auto r=.04;//seems high
+    auto sig=0.2;
+    auto T=.25;
+    auto S0=500.0;  
+    auto C=1.0;
+    auto G=1.4;
+    auto M=2.5;
+    auto Y=.6;
+    auto kappa=.5;
+    auto a=.5;//long run tau of .2 (includes sigma)
+    auto v0=0.95;//.2;
+    auto adaV=.2;
+    auto rho=-.4;//leverage rho
+    auto discount=exp(-r*T);
+ 
+    auto BSCF=[&](const auto& u){
+        return exp(r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, 0.0)*T,
+            a, 
+            kappa,
+            adaV,
+            T, 
+            v0
+        )+chfunctions::cirLogMGF(
+           -chfunctions::gaussLogCF(
+                u, -.5*sig*sig, sig
+            )*T,
+            a, 
+            kappa-adaV*rho*u,
+            adaV,
+            T, 
+            v0
+        ));
+    };
+    
+    
+    int numX=pow(2, 10); //this is high...this seems to be a computationally tricky problem
+    auto ada=.25;
+    auto myOptionsPrice=optionprice::CarrMadanPut(numX,  
+        ada,
+        S0, 
+        discount, 
+        BSCF
+    );
+   
+    auto b=optionprice::getMaxK(ada);
+    auto lambda=optionprice::getLambda(numX, b);
+    auto myXDomain=optionprice::getCarrMadanStrikes(ada, S0, numX);
+    //auto myReference=108.49914;//https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 20
+    auto myReference=26.7497679693;//I think this is right, but this is based solely off whether it makes logical sense
+    REQUIRE(myOptionsPrice[numX/2]==Approx(myReference).epsilon(.0001));
+
+}
+
+
+TEST_CASE("CarrMadanCGMYStochasticVolNoCorr", "[OptionPricing]"){
+    //https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 20
+    //S K T r q σ C G M Y
+    //500 500 0.25 0.4 0.0 0.2 1.0 1.4 2.5 1.4
+    auto r=.04;//seems high
+    auto sig=0.2;
+    auto T=.25;
+    auto S0=500.0;  
+    auto C=1.0;
+    auto G=1.4;
+    auto M=2.5;
+    auto Y=.6;
+    auto kappa=.5;
+    auto a=.5;//long run tau of .2 (includes sigma)
+    auto v0=0.95;//.2;
+    auto adaV=.2;
+    auto discount=exp(-r*T);
+ 
+    auto BSCF=[&](const auto& u){
+        return exp(r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, sig)*T,
+            a, 
+            kappa,
+            adaV,
+            T, 
+            v0
+        ));
+    };
+    
+    
+    int numX=pow(2, 10); //this is high...this seems to be a computationally tricky problem
+    auto ada=.25;
+    auto myOptionsPrice=optionprice::CarrMadanPut(numX,  
+        ada,
+        S0, 
+        discount, 
+        BSCF
+    );
+   
+    auto b=optionprice::getMaxK(ada);
+    auto lambda=optionprice::getLambda(numX, b);
+    auto myXDomain=optionprice::getCarrMadanStrikes(ada, S0, numX);
+
+    auto myReference=28.1881041957;//I think this is right, but this is based solely off whether it makes logical sense
+    REQUIRE(myOptionsPrice[numX/2]==Approx(myReference).epsilon(.0001));
+
+}
+
+
+TEST_CASE("CarrMadanCGMYStochasticVolCallCorr", "[OptionPricing]"){
+    //https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 20
+    //S K T r q σ C G M Y
+    //500 500 0.25 0.4 0.0 0.2 1.0 1.4 2.5 1.4
+    auto r=.04;//seems high
+    auto sig=0.2;
+    auto T=.25;
+    auto S0=500.0;  
+    auto C=1.0;
+    auto G=1.4;
+    auto M=2.5;
+    auto Y=.6;
+    auto kappa=.5;
+    auto a=.5;//long run tau of .2 (includes sigma)
+    auto v0=0.95;//.2;
+    auto adaV=.2;
+    auto rho=-.4;//leverage rho
+    auto discount=exp(-r*T);
+ 
+    auto BSCF=[&](const auto& u){
+        return exp(r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, 0.0)*T,
+            a, 
+            kappa,
+            adaV,
+            T, 
+            v0
+        )+chfunctions::cirLogMGF(
+           -chfunctions::gaussLogCF(
+                u, -.5*sig*sig, sig
+            )*T,
+            a, 
+            kappa-adaV*rho*u, //correlation (leverage neutral)
+            adaV,
+            T, 
+            v0
+        ));
+    };
+    
+    
+    int numX=pow(2, 10); //this is high...this seems to be a computationally tricky problem
+    auto ada=.25;
+    auto myOptionsPrice=optionprice::CarrMadanCall(numX,  
+        ada,
+        S0, 
+        discount, 
+        BSCF
+    );
+   
+    auto b=optionprice::getMaxK(ada);
+    auto lambda=optionprice::getLambda(numX, b);
+    auto myXDomain=optionprice::getCarrMadanStrikes(ada, S0, numX);
+    //auto myReference=108.49914;//https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 20
+    auto myReference=31.7248510947;//I think this is right, but this is based solely off whether it makes logical sense
+    REQUIRE(myOptionsPrice[numX/2]==Approx(myReference).epsilon(.0001));
+
+}
+
+TEST_CASE("CarrMadanCGMYStochasticVolCallNoCorr", "[OptionPricing]"){
+    //https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 20
+    //S K T r q σ C G M Y
+    //500 500 0.25 0.4 0.0 0.2 1.0 1.4 2.5 1.4
+    auto r=.04;//seems high
+    auto sig=0.2;
+    auto T=.25;
+    auto S0=500.0;  
+    auto C=1.0;
+    auto G=1.4;
+    auto M=2.5;
+    auto Y=.6;
+    auto kappa=.5;
+    auto a=.5;//long run tau of .2 (includes sigma)
+    auto v0=0.95;//.2; 
+    auto adaV=.2;
+    auto discount=exp(-r*T);
+ 
+    auto BSCF=[&](const auto& u){
+        return exp(r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, sig)*T,
+            a, 
+            kappa,
+            adaV,
+            T, 
+            v0
+        ));
+    };
+    
+    
+    int numX=pow(2, 10); //this is high...this seems to be a computationally tricky problem
+    auto ada=.25;
+    auto myOptionsPrice=optionprice::CarrMadanCall(numX,  
+        ada,
+        S0, 
+        discount, 
+        BSCF
+    );
+   
+    auto b=optionprice::getMaxK(ada);
+    auto lambda=optionprice::getLambda(numX, b);
+    auto myXDomain=optionprice::getCarrMadanStrikes(ada, S0, numX);
+
+    auto myReference= 33.1631873211;//I think this is right, but this is based solely off whether it makes logical sense
+    REQUIRE(myOptionsPrice[numX/2]==Approx(myReference).epsilon(.0001));
+
+}
