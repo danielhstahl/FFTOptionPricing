@@ -624,7 +624,7 @@ TEST_CASE("CarrMadanCGMYPut", "[OptionPricing]"){
     auto M=2.5;
     auto Y=.6;
     auto kappa=.5;
-    auto a=.5;//long run tau of 1
+    auto a=kappa;//.5;//long run tau of 1
     auto v0=1.05;
     auto adaV=.2;
     auto rho=-1.0;//-.4;//leverage rho
@@ -638,6 +638,16 @@ TEST_CASE("CarrMadanCGMYPut", "[OptionPricing]"){
             T, 
             v0
         ));
+    };
+    auto CFCorrOnlyBM=[&](const auto& u){
+        return exp(r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::gaussLogCF(u, -sig*sig*.5, sig),
+            a, 
+            kappa-adaV*rho*u*sig,
+            adaV,
+            T, 
+            v0
+        )+chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, 0.0)*T);
     };
     auto CFStoch=[&](const auto& u){
         return exp(r*T*u+chfunctions::cirLogMGF(
@@ -674,6 +684,12 @@ TEST_CASE("CarrMadanCGMYPut", "[OptionPricing]"){
         discount, 
         CFBase
     );
+    auto myOptionsPriceCorrBM=optionprice::CarrMadanPut(numX,  
+        ada,
+        S0, 
+        discount, 
+        CFCorrOnlyBM
+    );
    
     auto b=optionprice::getMaxK(ada);
     auto lambda=optionprice::getLambda(numX, b);
@@ -684,6 +700,11 @@ TEST_CASE("CarrMadanCGMYPut", "[OptionPricing]"){
     std::cout<<"corr: "<<myOptionsPriceCorr[numX/2]<<std::endl;
     std::cout<<"stoch: "<<myOptionsPriceStoch[numX/2]<<std::endl;
     std::cout<<"base: "<<myOptionsPriceBase[numX/2]<<std::endl;
+    std::cout<<"corrBM: "<<myOptionsPriceCorrBM[numX/2]<<std::endl;
+    std::cout<<"corr: "<<myOptionsPriceCorr[numX/2-100]<<std::endl;
+    std::cout<<"stoch: "<<myOptionsPriceStoch[numX/2-100]<<std::endl;
+    std::cout<<"base: "<<myOptionsPriceBase[numX/2-100]<<std::endl;
+    std::cout<<"corrBM: "<<myOptionsPriceCorrBM[numX/2-100]<<std::endl;
     REQUIRE(myOptionsPriceCorr[numX/2]==Approx(myReferenceCorr).epsilon(.0001));
     REQUIRE(myOptionsPriceStoch[numX/2]==Approx(myReferenceStoch).epsilon(.0001));
     REQUIRE(myOptionsPriceBase[numX/2]==Approx(myReferenceBase).epsilon(.0001));
