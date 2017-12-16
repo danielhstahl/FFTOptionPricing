@@ -5,6 +5,7 @@
 #include "OptionPricing.h"
 #include <chrono>
 #include "fft.h"
+#include <deque>
 #include <iostream>
 #include "CharacteristicFunctions.h"
 
@@ -191,6 +192,8 @@ TEST_CASE("FangOosterleeCallFewK", "[OptionPricing]"){
     KArray[2]=50;//strike 50
     KArray[1]=60;//strike 60
     KArray[0]=7500;
+   
+    
     auto started = std::chrono::high_resolution_clock::now();
     auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, BSCF);
     auto done = std::chrono::high_resolution_clock::now();
@@ -229,7 +232,7 @@ TEST_CASE("FangOosterleeCallFewKLowT", "[OptionPricing]"){
         } 
     };
     int numU=256; //This should run extremely quickly since only have 5 strikes, the higher U is to compensate for low t
-    auto KArray=std::vector<double>(5, 0);
+    auto KArray=std::deque<double>(5, 0);
     KArray[4]=.3;
     KArray[3]=40;//strike 40
     KArray[2]=50;//strike 50
