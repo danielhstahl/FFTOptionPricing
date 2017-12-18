@@ -112,6 +112,60 @@ TEST_CASE("FSTSPut", "OptionPricing"){
         REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))-myXDomain[i]+K*discount(myXDomain[i])).epsilon(.0001));
     }
 }
+
+TEST_CASE("FSTSPutLowT", "OptionPricing"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=.25;
+    auto K=50.0; 
+    
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=[&](const auto& x){
+        return exp(-r*T);
+    };
+
+    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
+        if(sigma>0){
+            double s=sqrt(2.0);
+            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
+            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
+        }
+        else{
+            if(S0>k){
+                return (S0-k)*discount;
+            }
+            else{
+                return 0.0;
+            }
+        }
+    };
+
+    auto payoff=[&](const auto& initVal, const auto& logResult, const auto& K){
+        auto assetValue=initVal*exp(logResult);
+        return assetValue<K?K-assetValue:0.0;
+    };
+    int numX=pow(2, 10);
+    double xmax=5.0*sqrt(T);
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myOptionsPrice=optionprice::FSTS(numX, xmax, 
+        discount, 
+        [&](const auto& logR){return payoff(K, logR, K);}, 
+        BSCF
+    );
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+
+    auto myXDomain=optionprice::getFSTSUnderlying(-xmax, xmax, K, numX);
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){
+        REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))-myXDomain[i]+K*discount(myXDomain[i])).epsilon(.0001));
+    }
+}
+
+
 TEST_CASE("FangOosterleeCall", "[OptionPricing]"){
     auto r=.05;
     auto sig=.3;
