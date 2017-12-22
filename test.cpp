@@ -597,7 +597,7 @@ TEST_CASE("FangOosterleeCallCGMYReducesToBS", "[OptionPricing]"){
 }
 
 
-TEST_CASE("FangOosterleeCallCGMYWithVol", "[OptionPricing]"){
+TEST_CASE("FangOosterleePutCGMYWithVol", "[OptionPricing]"){
     //https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 20
     //S K T r q σ C G M Y
     //500 500 0.25 0.4 0.0 0.2 1.0 1.4 2.5 1.4
@@ -767,5 +767,109 @@ TEST_CASE("CarrMadanCGMYPut", "[OptionPricing]"){
     REQUIRE(myOptionsPriceBase[numX/2]==Approx(myReferenceBase).epsilon(.0001));
     
 
+}
+
+/**test heston*/
+//http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf pg 15
+TEST_CASE("CarrMadanHeston", "[OptionPricing]"){
+    //heston parameters
+    double b=.0398;
+    double a=1.5768;
+    double c=.5751;
+    double rho=-.5711;
+    double v0=.0175;
+    auto r=0.0;
+    //convert to extended CGMY
+    auto sig=sqrt(b);
+    auto speed=a;
+    auto T=1.0;
+    auto S0=100.0;  
+    auto kappa=speed;//long run tau of 1
+    auto v0Hat=v0/b;
+    auto adaV=c/sqrt(b);
+    auto discount=exp(-r*T);
+
+    /**These two CFs should be the same*/
+    auto CFCorr=[&](const auto& u){
+        return exp(r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::cgmyLogRNCF(u, 0.0, 1.0, 1.0, .5, 0.0, sig),
+            speed, 
+            kappa-adaV*rho*u*sig,
+            adaV,
+            T, 
+            v0Hat
+        ));
+    };
+    auto CFCorrOnlyBM=[&](const auto& u){
+        return exp(r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::gaussLogCF(u, -sig*sig*.5, sig),
+            speed, 
+            kappa-adaV*rho*u*sig,
+            adaV,
+            T, 
+            v0Hat
+        ));
+    };
+    int numX=pow(2, 10); 
+    auto ada=.25;
+    auto myOptionsPriceCorr=optionprice::CarrMadanPut(numX,  
+        ada,
+        S0, 
+        discount, 
+        CFCorr
+    );
+
+    auto myOptionsPriceCorrBM=optionprice::CarrMadanPut(numX,  
+        ada,
+        S0, 
+        discount, 
+        CFCorrOnlyBM
+    );
+   
+    auto bLim=optionprice::getMaxK(ada);
+    auto lambda=optionprice::getLambda(numX, bLim);
+    auto myXDomain=optionprice::getCarrMadanStrikes(ada, S0, numX);
+    auto myReference= 5.78515545;
+    std::cout<<myOptionsPriceCorr[numX/2]<<std::endl;
+    std::cout<<myOptionsPriceCorrBM[numX/2]<<std::endl;
+    REQUIRE(myOptionsPriceCorr[numX/2]==Approx(myReference).epsilon(.0001));
+    REQUIRE(myOptionsPriceCorrBM[numX/2]==Approx(myReference).epsilon(.0001));
+}
+TEST_CASE("FangOostHeston", "[OptionPricing]"){
+    //heston parameters
+    double b=.0398;
+    double a=1.5768;
+    double c=.5751;
+    double rho=-.5711;
+    double v0=.0175;
+    auto r=0.0;
+    //convert to extended CGMY
+    auto sig=sqrt(b);
+    auto speed=a;
+    auto T=1.0;
+    auto S0=100.0;  
+    auto kappa=speed;//long run tau of 1
+    auto v0Hat=v0/b;
+    auto adaV=c/sqrt(b);
+    auto discount=exp(-r*T);
+    auto CFCorr=[&](const auto& u){
+        return exp(r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::cgmyLogRNCF(u, 0.0, 1.0, 1.0, .5, 0.0, sig),
+            speed, 
+            kappa-adaV*rho*u*sig,
+            adaV,
+            T, 
+            v0Hat
+        ));
+    };
+    std::vector<double> KArray(3);
+    KArray[2]=.3;
+    KArray[1]=100;
+    KArray[0]=5000;
+    int numU=256; //this is high...this seems to be a computationally tricky problem
+    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, CFCorr);
+    auto myReference= 5.78515545;
+    std::cout<<myOptionsPrice[1]<<std::endl;
+    REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
 }
 
