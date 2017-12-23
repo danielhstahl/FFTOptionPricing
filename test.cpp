@@ -54,13 +54,14 @@ TEST_CASE("FSTSCall", "OptionPricing"){
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
 
-    auto myXDomain=optionprice::getFSTSUnderlying(-xmax, xmax, K, numX);
+    auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
         REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))).epsilon(.0001));
     }
 }
+
 TEST_CASE("FSTSPut", "OptionPricing"){
     auto r=.05;
     auto sig=.3;
@@ -105,7 +106,7 @@ TEST_CASE("FSTSPut", "OptionPricing"){
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
 
-    auto myXDomain=optionprice::getFSTSUnderlying(-xmax, xmax, K, numX);
+    auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
@@ -157,7 +158,7 @@ TEST_CASE("FSTSPutLowT", "OptionPricing"){
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
 
-    auto myXDomain=optionprice::getFSTSUnderlying(-xmax, xmax, K, numX);
+    auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
@@ -871,5 +872,55 @@ TEST_CASE("FangOostHeston", "[OptionPricing]"){
     auto myReference= 5.78515545;
     std::cout<<myOptionsPrice[1]<<std::endl;
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
+}
+
+TEST_CASE("FSTSHeston", "[OptionPricing]"){
+    //heston parameters
+    double b=.0398;
+    double a=1.5768;
+    double c=.5751;
+    double rho=-.5711;
+    double v0=.0175;
+    auto r=0.0;
+    //convert to extended CGMY
+    auto sig=sqrt(b);
+    auto speed=a;
+    auto T=1.0;
+    //auto S0=100.0;  
+    auto strike=100.0;
+    auto kappa=speed;//long run tau of 1
+    auto v0Hat=v0/b;
+    auto adaV=c/sqrt(b);
+    auto discount=[&](const auto& x){
+        return exp(-r*T);
+    };
+    auto CFCorr=[&](const auto& u){
+        return exp(r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::cgmyLogRNCF(u, 0.0, 1.0, 1.0, .5, 0.0, sig),
+            speed, 
+            kappa-adaV*rho*u*sig,
+            adaV,
+            T, 
+            v0Hat
+        ));
+    };
+    int numU=256; //this is high...this seems to be a computationally tricky problem
+    auto payoff=[&](const auto& initVal, const auto& logResult, const auto& K){
+        auto assetValue=initVal*exp(logResult);
+        return assetValue>K?assetValue-K:0.0;
+    };
+    int numX=pow(2, 10);
+    double xmax=5.0;
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myOptionsPrice=optionprice::FSTS(numX, xmax, 
+        discount, 
+        [&](const auto& logR){return payoff(strike, logR, strike);}, 
+        CFCorr
+    );
+    auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, strike, numX);
+    std::cout<<myXDomain[numX/2]<<std::endl;
+    auto myReference= 6.09466;
+    std::cout<<myOptionsPrice[numX/2]<<std::endl;
+    REQUIRE(myOptionsPrice[numX/2]==Approx(myReference).epsilon(.001));
 }
 

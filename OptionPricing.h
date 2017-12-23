@@ -16,10 +16,10 @@ namespace optionprice{
     @xMax maximum x
     @returns the distance between nodes
     */
-    template<typename Index, typename Number>
+    /*template<typename Index, typename Number>
     auto computeDX(const Index& xDiscrete, const Number& xMin,const Number& xMax){
         return (xMax-xMin)/(xDiscrete-1.0);
-    }
+    }*/
     /**
     Used by FSTS method
     @xMin minimum x
@@ -27,10 +27,10 @@ namespace optionprice{
     @index index of the node
     @returns value at the node index
     */
-    template<typename Index, typename Number>
+    /*template<typename Index, typename Number>
     auto getDomain(const Number& xMin, const Number& dx, const Index& index){
         return xMin+index*dx;
-    }
+    }*/
 
     /**
     Used by FSTS method.  This wraps back around when reaches a certain level.  
@@ -73,13 +73,13 @@ namespace optionprice{
     @numX number of nodes
     @returns vector of stock or asset prices.  Note that this is different from Carr Madan which prices in terms of a vector of strike prices
     */
-    template<typename Index, typename Number>
+    /*template<typename Index, typename Number>
     auto getFSTSUnderlying(const Number& xMin, const Number& xMax, const Number& K, const Index& numX){
-        auto dx=computeDX(numX, xMin, xMax);
+        auto dx=fangoost::computeDX(numX, xMin, xMax);
         return futilities::for_each_parallel(0, numX, [&](const auto& index){
             return K*exp(getDomain(xMin, dx, index));
         });
-    }
+    }*/
     /**
     Helper function for Fang Oosterlee
     @xMin minimum X
@@ -89,7 +89,7 @@ namespace optionprice{
     @returns vector of stock or asset prices.  Note that this is different from Carr Madan which prices in terms of a vector of strike prices.  However, this can also price per strike; see getFangOostStrike
     */
     template<typename Index, typename Number>
-    auto getFangOostUnderlying(const Number& xMin, const Number& xMax, const Number& K, const Index& numX){
+    auto getStrikeUnderlying(const Number& xMin, const Number& xMax, const Number& K, const Index& numX){
         auto dx=fangoost::computeDX(numX, xMin, xMax);
         return futilities::for_each_parallel(0, numX, [&](const auto& index){
             return K*exp(fangoost::getX(xMin, dx, index));
@@ -126,7 +126,7 @@ namespace optionprice{
 
     template<typename Index, typename Number>
     auto getCarrMadanKAtIndex(const Number& b, const Number& lambda, const Number& S0, const Index& index){
-        return S0*exp(optionprice::getDomain(-b, lambda, index));
+        return S0*exp(fangoost::getX(-b, lambda, index));
     }
     /**
     Used by CarrMadan
@@ -165,14 +165,14 @@ namespace optionprice{
         Payoff&& payoff, 
         CF&& cf
     ){
-        auto dx=computeDX(numSteps, -xmax, xmax);
+        auto dx=fangoost::computeDX(numSteps, -xmax, xmax);
         auto vmax=M_PI/dx;
         auto du=2.0*vmax/numSteps;
         auto incrementedPayoff=ifft(
             futilities::for_each_parallel(
                 fft(
                     futilities::for_each_parallel(0, numSteps, [&](const auto& index){
-                        return std::complex<double>(payoff(getDomain(-xmax, dx, index)), 0);
+                        return std::complex<double>(payoff(fangoost::getX(-xmax, dx, index)), 0);
                     })
                 ), 
                 [&](const auto& val, const auto& index){
@@ -181,7 +181,7 @@ namespace optionprice{
             )
         );
         return futilities::for_each_parallel(0, numSteps, [&](const auto& index){
-            return discount(getDomain(-xmax, dx, index))*incrementedPayoff[index].real()/numSteps;
+            return discount(fangoost::getX(-xmax, dx, index))*incrementedPayoff[index].real()/numSteps;
         });
     }
     
@@ -349,7 +349,7 @@ namespace optionprice{
             )
         );
         return futilities::for_each_parallel(0, numSteps, [&](const auto& index){
-            return mOutput(S0*cmplVector[index].real()*exp(-alpha*getDomain(-b, lambda, index))*ada/(M_PI*3.0), index);
+            return mOutput(S0*cmplVector[index].real()*exp(-alpha*fangoost::getX(-b, lambda, index))*ada/(M_PI*3.0), index);
         });
     }
 
