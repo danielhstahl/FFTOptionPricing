@@ -924,3 +924,47 @@ TEST_CASE("FSTSHeston", "[OptionPricing]"){
     REQUIRE(myOptionsPrice[numX/2]==Approx(myReference).epsilon(.001));
 }
 
+TEST_CASE("FangOostDegenerateBS", "[OptionPricing]"){
+    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
+        if(sigma>0){
+            double s=sqrt(2.0);
+            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
+            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
+        }
+        else{
+            if(S0>k){
+                return (S0-k)*discount;
+            }
+            else{
+                return 0.0;
+            }
+        }
+    };
+    auto sig=.3;
+    auto r=.03;
+    auto adaV=0.0;//zero, so should be BS
+    auto speed=.4;//shouldn't matter
+    auto T=.25;
+    auto rho=.3;//shouldn't matter
+    auto discount=exp(-r*T);
+    auto S0=100.0;
+    auto v0Hat=1.0;//else will be weird..a decay of a non-stochastic time change to one
+    auto CFCorr=[&](const auto& u){
+        return exp(r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::cgmyLogRNCF(u, 0.0, 1.0, 1.0, .5, 0.0, sig),
+            speed, 
+            speed-adaV*rho*u*sig,
+            adaV,
+            T, 
+            v0Hat
+        ));
+    };
+    std::vector<double> KArray(3); 
+    KArray[2]=.3;
+    KArray[1]=100;
+    KArray[0]=5000;
+    int numU=256;
+    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, CFCorr);
+    auto myReference= BS(S0, discount, KArray[1], sig*sqrt(T));
+    REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
+}
