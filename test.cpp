@@ -158,6 +158,50 @@ TEST_CASE("FSTSPut", "OptionPricing"){
     }
 }
 
+TEST_CASE("FSTSPutDelta", "OptionPricing"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto K=50.0; 
+    
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=[&](const auto& x){
+        return exp(-r*T);
+    };
+
+    auto BSDelta=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
+        double s=sqrt(2.0);
+        auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
+        return .5+.5*erf(d1/s)-1.0;
+        
+    };
+
+    auto payoff=[&](const auto& initVal, const auto& logResult, const auto& K){
+        auto assetValue=initVal*exp(logResult);
+        return assetValue<K?K-assetValue:0.0;
+    };
+    int numX=pow(2, 10);
+    double xmax=5.0;
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myDelta=optionprice::FSTSDelta(numX, xmax, 
+        discount, 
+        [&](const auto& logR){return exp(-logR)/K;}, 
+        [&](const auto& logR){return payoff(K, logR, K);}, 
+        BSCF
+    );
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+
+    auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){
+        REQUIRE(myDelta[i]==Approx(BSDelta(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))).epsilon(.0001));
+    }
+}
+
 TEST_CASE("FSTSPutLowT", "OptionPricing"){
     auto r=.05;
     auto sig=.3;
