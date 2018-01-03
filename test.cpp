@@ -62,6 +62,50 @@ TEST_CASE("FSTSCall", "OptionPricing"){
     }
 }
 
+
+TEST_CASE("FSTSCallDelta", "OptionPricing"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto K=50.0; 
+    
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=[&](const auto& x){
+        return exp(-r*T);
+    };
+
+    auto BSDelta=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
+        double s=sqrt(2.0);
+        auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
+        return .5+.5*erf(d1/s);
+    };
+
+    auto payoff=[&](const auto& initVal, const auto& logResult, const auto& K){
+        auto assetValue=initVal*exp(logResult);
+        return assetValue>K?assetValue-K:0.0;
+    };
+    int numX=pow(2, 10);
+    double xmax=5.0;
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myDelta=optionprice::FSTSDelta(numX, xmax, 
+        discount, 
+        [&](const auto& logR){return exp(-logR)/K;},
+        [&](const auto& logR){return payoff(K, logR, K);}, 
+        BSCF
+    );
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+
+    auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
+    int i=(int)numX*.4;
+    int mxX=(int)numX*.6;
+    for(;i<mxX; ++i){
+        REQUIRE(myDelta[i]==Approx(BSDelta(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))).epsilon(.0001));
+    }
+}
+
 TEST_CASE("FSTSPut", "OptionPricing"){
     auto r=.05;
     auto sig=.3;
@@ -208,6 +252,74 @@ TEST_CASE("FangOosterleeCall", "[OptionPricing]"){
     for(;i<mxX; ++i){ 
         auto analyticOption=BS(S0, discount, KArray[i], sig*sqrt(T));
         REQUIRE(myOptionsPrice[i]==Approx(analyticOption).epsilon(.0001));
+    }
+}
+TEST_CASE("FangOosterleeCallDelta", "[OptionPricing]"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto S0=50.0; 
+   
+
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=exp(-r*T);
+
+    auto BSDelta=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
+        double s=sqrt(2.0);
+        auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
+        return .5+.5*erf(d1/s);
+        
+    };
+    double xmax=5.0;
+    int numX=pow(2, 10);
+    int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
+    auto KArray=optionprice::getFangOostStrike(-xmax, xmax, S0, numX);
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myOptionsDelta=optionprice::FangOostCallDelta(S0, KArray, numU, discount, BSCF);
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){ 
+        auto analyticDelta=BSDelta(S0, discount, KArray[i], sig*sqrt(T));
+        REQUIRE(myOptionsDelta[i]==Approx(analyticDelta).epsilon(.0001));
+    }
+}
+TEST_CASE("FangOosterleePutDelta", "[OptionPricing]"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto S0=50.0; 
+   
+
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=exp(-r*T);
+
+    auto BSDelta=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
+        double s=sqrt(2.0);
+        auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
+        return .5+.5*erf(d1/s)-1.0;
+        
+    };
+    double xmax=5.0;
+    int numX=pow(2, 10);
+    int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
+    auto KArray=optionprice::getFangOostStrike(-xmax, xmax, S0, numX);
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myOptionsDelta=optionprice::FangOostPutDelta(S0, KArray, numU, discount, BSCF);
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){ 
+        auto analyticDelta=BSDelta(S0, discount, KArray[i], sig*sqrt(T));
+        REQUIRE(myOptionsDelta[i]==Approx(analyticDelta).epsilon(.0001));
     }
 }
 

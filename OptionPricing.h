@@ -184,6 +184,38 @@ namespace optionprice{
             return discount(fangoost::getX(-xmax, dx, index))*incrementedPayoff[index].real()/numSteps;
         });
     }
+
+    template<typename Index, typename Number, typename Discount, typename Payoff, typename CF, typename ComputeAsset>
+    auto FSTSDelta(
+        const Index& numSteps, 
+        const Number& xmax, 
+        Discount&& discount, 
+        ComputeAsset&& computeAsset,
+        Payoff&& payoff, 
+        CF&& cf
+    ){
+        auto dx=fangoost::computeDX(numSteps, -xmax, xmax);
+        auto vmax=M_PI/dx;
+        auto du=2.0*vmax/numSteps;
+        auto incrementedPayoff=ifft(
+            futilities::for_each_parallel(
+                fft(
+                    futilities::for_each_parallel(0, numSteps, [&](const auto& index){
+                        return std::complex<double>(payoff(fangoost::getX(-xmax, dx, index)), 0);
+                    })
+                ), 
+                [&](const auto& val, const auto& index){
+                    auto u=std::complex<double>(0, getUDomain(vmax, du, index));
+                    return u*val*cf(u);
+                }
+            )
+        );
+        return futilities::for_each_parallel(0, numSteps, [&](const auto& index){
+            auto x=fangoost::getX(-xmax, dx, index);
+            return discount(x)*incrementedPayoff[index].real()*computeAsset(x)/numSteps;
+        });
+    }
+
     
 
     /**For Fang Oost (defined in the paper)*/
@@ -248,6 +280,28 @@ namespace optionprice{
             mOutput
         );
     }
+    template<typename Index, typename Array,  typename CF, typename OutputManipulator>
+    auto FangOostGenericDelta(
+        Array&& xValues,
+        const Index& numUSteps, 
+        OutputManipulator&& mOutput,
+        CF&& cf
+     ){
+         //x goes from log(S0/kmin) to log(S0/kmax)
+        auto xMin=xValues.front();
+        auto xMax=xValues.back();
+        return futilities::for_each_parallel(
+            fangoost::computeExpectationVectorLevy(
+                xValues, numUSteps, [&](const auto& u){
+                    return cf(u)*u;
+                }, 
+                [&](const auto& u, const auto& x, const auto& k){
+                    return phiK(xMin, xMax, xMin, 0.0, u, k)-chiK(xMin, xMax, xMin, 0.0, u);
+                }
+            ), 
+            mOutput
+        );
+    }
 
     
 
@@ -278,6 +332,23 @@ namespace optionprice{
             cf
         );
     }
+    template<typename Index, typename Array, typename Number,  typename CF>
+    auto FangOostPutDelta(
+        const Number& S0,
+        const Array& K,
+        const Index& numUSteps,     
+        const Number& discount,
+        CF&& cf
+     ){
+        return FangOostGenericDelta(
+            getXFromK(S0, K),
+            numUSteps,  
+            [&](const auto& val, const auto& index){
+                return val*discount*K[index]/S0;
+            }, 
+            cf
+        );
+    }
     /**
         Fang Oosterlee Approach for a call 
         http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
@@ -301,6 +372,23 @@ namespace optionprice{
             numUSteps, 
             [&](const auto& val, const auto& index){
                 return (val-1.0)*discount*K[index]+S0;
+            }, 
+            cf
+        );
+    }
+    template<typename Index, typename Array, typename Number, typename CF>
+    auto FangOostCallDelta(
+        const Number& S0,
+        const Array& K,
+        const Index& numUSteps,         
+        const Number& discount,
+        CF&& cf
+     ){
+        return FangOostGenericDelta(
+            getXFromK(S0, K),
+            numUSteps, 
+            [&](const auto& val, const auto& index){
+                return val*discount*K[index]/S0+1.0;
             }, 
             cf
         );
