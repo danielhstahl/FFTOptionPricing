@@ -35,7 +35,7 @@ double BSCallTheta(double S0, double k, double sigma, double r, double T){
     return -S0*dnorm*sigma/(2.0*sqrt(T))-r*k*exp(-r*T)*(.5+.5*erf(d2/s));
 }
 double BSPutTheta(double S0, double k, double sigma, double r, double T){
-    return BSCallTheta(S0, k, sigma, r, T)-r*k*exp(-r*T);
+    return BSCallTheta(S0, k, sigma, r, T)+r*k*exp(-r*T);
 }
 
 TEST_CASE("FSTSCall", "OptionPricing"){
@@ -88,7 +88,6 @@ TEST_CASE("FSTSCallDelta", "OptionPricing"){
     auto getAssetPrice=[&](const auto& logAsset){
         return K*exp(logAsset);
     };
-
     int numX=pow(2, 10);
     double xmax=5.0;
     auto started = std::chrono::high_resolution_clock::now();
@@ -139,11 +138,11 @@ TEST_CASE("FSTSCallTheta", "OptionPricing"){
     std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
     
     auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
-    std::cout<<BSCallTheta(myXDomain[numX/2],  K, sig, T, r)<<", "<<myTheta[numX/2]<<", "<<myXDomain[numX/2]<<std::endl;
-    int i=(int)numX*.4;
-    int mxX=(int)numX*.6;
+    std::cout<<BSCallTheta(myXDomain[numX/2],  K, sig, r, T)<<", "<<myTheta[numX/2]<<", "<<myXDomain[numX/2]<<std::endl;
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
-        REQUIRE(myTheta[i]==Approx(BSCallTheta(myXDomain[i], K, sig, T, r)).epsilon(.0001));
+        REQUIRE(myTheta[i]==Approx(BSCallTheta(myXDomain[i], K, sig, r, T)).epsilon(.0001));
     }
 }
 
@@ -251,7 +250,6 @@ TEST_CASE("FSTSPutTheta", "OptionPricing"){
     std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
     
     auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
-    std::cout<<BSPutTheta(myXDomain[numX/2],  K, sig, r, T)<<", "<<myTheta[numX/2]<<", "<<myXDomain[numX/2]<<std::endl;
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
@@ -372,8 +370,6 @@ TEST_CASE("FangOosterleeCallTheta", "[OptionPricing]"){
     auto myOptionsTheta=optionprice::FangOostCallTheta(S0, KArray, r, T, numU, BSCF);
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
-    std::cout<<BSCallTheta(S0, KArray[numX/2], sig, r, T)<<", "<<myOptionsTheta[numX/2]<<", "<<KArray[numX/2]<<std::endl;
-
 
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
@@ -402,9 +398,6 @@ TEST_CASE("FangOosterleePutTheta", "[OptionPricing]"){
     auto myOptionsTheta=optionprice::FangOostPutTheta(S0, KArray,  r, T,numU, BSCF);
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
-    std::cout<<BSPutTheta(S0, KArray[numX/2], sig,  r, T)<<", "<<myOptionsTheta[numX/2]<<", "<<KArray[numX/2]<<std::endl;
-
-
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){ 

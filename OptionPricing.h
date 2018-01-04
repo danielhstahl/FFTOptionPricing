@@ -92,7 +92,7 @@ namespace optionprice{
         const CFU& cfu, 
         const U& u, const Rate& r
     ){
-        return -(log(cfu)-r)*cfu;
+        return cfu.real()>0.0?-(log(cfu)-r)*cfu:0.0;
     }
 
     
@@ -512,7 +512,7 @@ namespace optionprice{
                 return optionThetaTransform(cfu, u, r);
             },
             [&](const auto& val, const auto& index){
-                return (val+r)*discount*K[index];
+                return (val-r)*discount*K[index];
             },
             cf
         );
