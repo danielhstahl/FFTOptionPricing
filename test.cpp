@@ -9,56 +9,66 @@
 #include <iostream>
 #include "CharacteristicFunctions.h"
 
+double BSCall(double S0, double discount, double k, double sigma, double T){
+    double s=sqrt(2.0);
+    double sigmasqrt=sqrt(T)*sigma;
+    auto d1=log(S0/(discount*k))/(sigmasqrt)+sigmasqrt*.5;
+    return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigmasqrt)/s)));
+}
+double BSPut(double S0, double discount, double k, double sigma, double T){
+    return BSCall(S0, discount, k, sigma, T)-S0+k*discount;
+}
+double BSCallDelta(double S0, double discount, double k, double sigma, double T){
+    double s=sqrt(2.0);
+    auto d1=log(S0/(discount*k))/(sigma*sqrt(T))+sigma*.5*sqrt(T);
+    return .5+.5*erf(d1/s);
+}
+double BSPutDelta(double S0, double discount, double k, double sigma, double T){
+    return BSCallDelta(S0, discount, k, sigma, T)-1.0;
+}
+
+double BSCallTheta(double S0, double k, double sigma, double r, double T){
+    double s=sqrt(2.0);
+    auto d2=(log(S0/k)+r*T-sigma*sigma*.5*T)/(sigma*sqrt(T));
+    auto d1=d2+sigma*sqrt(T);
+    auto dnorm=exp(-d1*d1/2.0)/(s*sqrt(M_PI));
+    return -S0*dnorm*sigma/(2.0*sqrt(T))-r*k*exp(-r*T)*(.5+.5*erf(d2/s));
+}
+double BSPutTheta(double S0, double k, double sigma, double r, double T){
+    return BSCallTheta(S0, k, sigma, r, T)+r*k*exp(-r*T);
+}
 
 TEST_CASE("FSTSCall", "OptionPricing"){
     auto r=.05;
     auto sig=.3;
     auto T=1.0;
     auto K=50.0; 
-    
+    auto discount=exp(-r*T);
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
-    auto discount=[&](const auto& x){
-        return exp(-r*T);
-    };
-
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        }
-    };
-
-    auto payoff=[&](const auto& initVal, const auto& logResult, const auto& K){
-        auto assetValue=initVal*exp(logResult);
+    auto payoff=[&](const auto& assetValue){
         return assetValue>K?assetValue-K:0.0;
+    };
+    auto getAssetPrice=[&](const auto& logAsset){
+        return K*exp(logAsset);
     };
     int numX=pow(2, 10);
     double xmax=5.0;
     auto started = std::chrono::high_resolution_clock::now();
-    auto myOptionsPrice=optionprice::FSTS(numX, xmax, 
-        discount, 
-        [&](const auto& logR){return payoff(K, logR, K);}, 
+    auto myOptionsPrice=optionprice::FSTSPrice(numX, xmax, 
+        r, T, 
+        getAssetPrice,
+        payoff,
         BSCF
     );
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
-
     auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
-        REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))).epsilon(.0001));
+        REQUIRE(myOptionsPrice[i]==Approx(BSCall(myXDomain[i], discount, K, sig, T)).epsilon(.0001));
     }
 }
 
@@ -68,31 +78,23 @@ TEST_CASE("FSTSCallDelta", "OptionPricing"){
     auto sig=.3;
     auto T=1.0;
     auto K=50.0; 
-    
+    auto discount=exp(-r*T);
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
-    auto discount=[&](const auto& x){
-        return exp(-r*T);
-    };
-
-    auto BSDelta=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        double s=sqrt(2.0);
-        auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-        return .5+.5*erf(d1/s);
-    };
-
-    auto payoff=[&](const auto& initVal, const auto& logResult, const auto& K){
-        auto assetValue=initVal*exp(logResult);
+    auto payoff=[&](const auto& assetValue){
         return assetValue>K?assetValue-K:0.0;
+    };
+    auto getAssetPrice=[&](const auto& logAsset){
+        return K*exp(logAsset);
     };
     int numX=pow(2, 10);
     double xmax=5.0;
     auto started = std::chrono::high_resolution_clock::now();
     auto myDelta=optionprice::FSTSDelta(numX, xmax, 
-        discount, 
-        [&](const auto& logR){return exp(-logR)/K;},
-        [&](const auto& logR){return payoff(K, logR, K);}, 
+        r, T, 
+        getAssetPrice,
+        payoff,
         BSCF
     );
     auto done = std::chrono::high_resolution_clock::now();
@@ -102,7 +104,45 @@ TEST_CASE("FSTSCallDelta", "OptionPricing"){
     int i=(int)numX*.4;
     int mxX=(int)numX*.6;
     for(;i<mxX; ++i){
-        REQUIRE(myDelta[i]==Approx(BSDelta(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))).epsilon(.0001));
+        REQUIRE(myDelta[i]==Approx(BSCallDelta(myXDomain[i], discount, K, sig, T)).epsilon(.0001));
+    }
+}
+
+TEST_CASE("FSTSCallTheta", "OptionPricing"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto K=50.0; 
+    
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=exp(-r*T);
+
+    auto payoff=[&](const auto& assetValue){
+        return assetValue>K?assetValue-K:0.0;
+    };
+    auto getAssetPrice=[&](const auto& logAsset){
+        return K*exp(logAsset);
+    };
+    int numX=pow(2, 10);
+    double xmax=5.0;
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myTheta=optionprice::FSTSTheta(numX, xmax, 
+        r, T, 
+        getAssetPrice,
+        payoff,
+        BSCF
+    );
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+    
+    auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
+    std::cout<<BSCallTheta(myXDomain[numX/2],  K, sig, r, T)<<", "<<myTheta[numX/2]<<", "<<myXDomain[numX/2]<<std::endl;
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){
+        REQUIRE(myTheta[i]==Approx(BSCallTheta(myXDomain[i], K, sig, r, T)).epsilon(.0001));
     }
 }
 
@@ -115,36 +155,21 @@ TEST_CASE("FSTSPut", "OptionPricing"){
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
-    auto discount=[&](const auto& x){
-        return exp(-r*T);
-    };
+    auto discount=exp(-r*T);
 
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        }
-    };
-
-    auto payoff=[&](const auto& initVal, const auto& logResult, const auto& K){
-        auto assetValue=initVal*exp(logResult);
+    auto payoff=[&](const auto& assetValue){
         return assetValue<K?K-assetValue:0.0;
+    };
+    auto getAssetPrice=[&](const auto& logAsset){
+        return K*exp(logAsset);
     };
     int numX=pow(2, 10);
     double xmax=5.0;
     auto started = std::chrono::high_resolution_clock::now();
-    auto myOptionsPrice=optionprice::FSTS(numX, xmax, 
-        discount, 
-        [&](const auto& logR){return payoff(K, logR, K);}, 
+    auto myOptionsPrice=optionprice::FSTSPrice(numX, xmax, 
+        r, T, 
+        getAssetPrice,
+        payoff,
         BSCF
     );
     auto done = std::chrono::high_resolution_clock::now();
@@ -154,7 +179,7 @@ TEST_CASE("FSTSPut", "OptionPricing"){
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
-        REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))-myXDomain[i]+K*discount(myXDomain[i])).epsilon(.0001));
+        REQUIRE(myOptionsPrice[i]==Approx(BSPut(myXDomain[i], discount, K, sig, T)).epsilon(.0001));
     }
 }
 
@@ -167,28 +192,21 @@ TEST_CASE("FSTSPutDelta", "OptionPricing"){
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
-    auto discount=[&](const auto& x){
-        return exp(-r*T);
-    };
+    auto discount=exp(-r*T);
 
-    auto BSDelta=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        double s=sqrt(2.0);
-        auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-        return .5+.5*erf(d1/s)-1.0;
-        
-    };
-
-    auto payoff=[&](const auto& initVal, const auto& logResult, const auto& K){
-        auto assetValue=initVal*exp(logResult);
+    auto payoff=[&](const auto& assetValue){
         return assetValue<K?K-assetValue:0.0;
+    };
+    auto getAssetPrice=[&](const auto& logAsset){
+        return K*exp(logAsset);
     };
     int numX=pow(2, 10);
     double xmax=5.0;
     auto started = std::chrono::high_resolution_clock::now();
     auto myDelta=optionprice::FSTSDelta(numX, xmax, 
-        discount, 
-        [&](const auto& logR){return exp(-logR)/K;}, 
-        [&](const auto& logR){return payoff(K, logR, K);}, 
+        r, T, 
+        getAssetPrice,
+        payoff,
         BSCF
     );
     auto done = std::chrono::high_resolution_clock::now();
@@ -198,7 +216,44 @@ TEST_CASE("FSTSPutDelta", "OptionPricing"){
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
-        REQUIRE(myDelta[i]==Approx(BSDelta(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))).epsilon(.0001));
+        REQUIRE(myDelta[i]==Approx(BSPutDelta(myXDomain[i], discount, K, sig, T)).epsilon(.0001));
+    }
+}
+TEST_CASE("FSTSPutTheta", "OptionPricing"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto K=50.0; 
+    
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=exp(-r*T);
+
+    auto payoff=[&](const auto& assetValue){
+        return assetValue<K?K-assetValue:0.0;
+    };
+    auto getAssetPrice=[&](const auto& logAsset){
+        return K*exp(logAsset);
+    };
+
+    int numX=pow(2, 10);
+    double xmax=5.0;
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myTheta=optionprice::FSTSTheta(numX, xmax, 
+        r, T, 
+        getAssetPrice,
+        payoff,
+        BSCF
+    );
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+    
+    auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){
+        REQUIRE(myTheta[i]==Approx(BSPutTheta(myXDomain[i], K, sig, r, T)).epsilon(.0001));
     }
 }
 
@@ -211,36 +266,21 @@ TEST_CASE("FSTSPutLowT", "OptionPricing"){
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
-    auto discount=[&](const auto& x){
-        return exp(-r*T);
-    };
+    auto discount=exp(-r*T);
 
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        }
-    };
-
-    auto payoff=[&](const auto& initVal, const auto& logResult, const auto& K){
-        auto assetValue=initVal*exp(logResult);
+    auto payoff=[&](const auto& assetValue){
         return assetValue<K?K-assetValue:0.0;
+    };
+    auto getAssetPrice=[&](const auto& logAsset){
+        return K*exp(logAsset);
     };
     int numX=pow(2, 10);
     double xmax=5.0*sqrt(T);
     auto started = std::chrono::high_resolution_clock::now();
-    auto myOptionsPrice=optionprice::FSTS(numX, xmax, 
-        discount, 
-        [&](const auto& logR){return payoff(K, logR, K);}, 
+    auto myOptionsPrice=optionprice::FSTSPrice(numX, xmax, 
+        r, T, 
+        getAssetPrice,
+        payoff,
         BSCF
     );
     auto done = std::chrono::high_resolution_clock::now();
@@ -250,7 +290,7 @@ TEST_CASE("FSTSPutLowT", "OptionPricing"){
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
-        REQUIRE(myOptionsPrice[i]==Approx(BS(myXDomain[i], discount(myXDomain[i]), K, sig*sqrt(T))-myXDomain[i]+K*discount(myXDomain[i])).epsilon(.0001));
+        REQUIRE(myOptionsPrice[i]==Approx(BSPut(myXDomain[i], discount, K, sig, T)).epsilon(.0001));
     }
 }
 
@@ -267,34 +307,19 @@ TEST_CASE("FangOosterleeCall", "[OptionPricing]"){
     };
     auto discount=exp(-r*T);
 
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        } 
-    };
     double xmax=5.0;
     int numX=pow(2, 10);
     int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
     auto KArray=optionprice::getFangOostStrike(-xmax, xmax, S0, numX);
     auto started = std::chrono::high_resolution_clock::now();
-    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, BSCF);
+    auto myOptionsPrice=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, BSCF);
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
 
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){ 
-        auto analyticOption=BS(S0, discount, KArray[i], sig*sqrt(T));
+        auto analyticOption=BSCall(S0, discount, KArray[i], sig, T);
         REQUIRE(myOptionsPrice[i]==Approx(analyticOption).epsilon(.0001));
     }
 }
@@ -310,26 +335,74 @@ TEST_CASE("FangOosterleeCallDelta", "[OptionPricing]"){
     };
     auto discount=exp(-r*T);
 
-    auto BSDelta=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        double s=sqrt(2.0);
-        auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-        return .5+.5*erf(d1/s);
-        
-    };
     double xmax=5.0;
     int numX=pow(2, 10);
     int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
     auto KArray=optionprice::getFangOostStrike(-xmax, xmax, S0, numX);
     auto started = std::chrono::high_resolution_clock::now();
-    auto myOptionsDelta=optionprice::FangOostCallDelta(S0, KArray, numU, discount, BSCF);
+    auto myOptionsDelta=optionprice::FangOostCallDelta(S0, KArray, r, T, numU, BSCF);
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
 
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){ 
-        auto analyticDelta=BSDelta(S0, discount, KArray[i], sig*sqrt(T));
+        auto analyticDelta=BSCallDelta(S0, discount, KArray[i], sig, T);
         REQUIRE(myOptionsDelta[i]==Approx(analyticDelta).epsilon(.0001));
+    }
+}
+TEST_CASE("FangOosterleeCallTheta", "[OptionPricing]"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto S0=50.0; 
+   
+
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=exp(-r*T);
+    double xmax=5.0;
+    int numX=pow(2, 10);
+    int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
+    auto KArray=optionprice::getFangOostStrike(-xmax, xmax, S0, numX);
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myOptionsTheta=optionprice::FangOostCallTheta(S0, KArray, r, T, numU, BSCF);
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){ 
+        auto analyticTheta=BSCallTheta(S0, KArray[i], sig, r, T);
+        REQUIRE(myOptionsTheta[i]==Approx(analyticTheta).epsilon(.0001));
+    }
+}
+TEST_CASE("FangOosterleePutTheta", "[OptionPricing]"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto S0=50.0; 
+   
+
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=exp(-r*T);
+
+    double xmax=5.0;
+    int numX=pow(2, 10);
+    int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
+    auto KArray=optionprice::getFangOostStrike(-xmax, xmax, S0, numX);
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myOptionsTheta=optionprice::FangOostPutTheta(S0, KArray,  r, T,numU, BSCF);
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){ 
+        auto analyticTheta=BSPutTheta(S0, KArray[i], sig, r, T);
+        REQUIRE(myOptionsTheta[i]==Approx(analyticTheta).epsilon(.0001));
     }
 }
 TEST_CASE("FangOosterleePutDelta", "[OptionPricing]"){
@@ -343,26 +416,19 @@ TEST_CASE("FangOosterleePutDelta", "[OptionPricing]"){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
     auto discount=exp(-r*T);
-
-    auto BSDelta=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        double s=sqrt(2.0);
-        auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-        return .5+.5*erf(d1/s)-1.0;
-        
-    };
     double xmax=5.0;
     int numX=pow(2, 10);
     int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
     auto KArray=optionprice::getFangOostStrike(-xmax, xmax, S0, numX);
     auto started = std::chrono::high_resolution_clock::now();
-    auto myOptionsDelta=optionprice::FangOostPutDelta(S0, KArray, numU, discount, BSCF);
+    auto myOptionsDelta=optionprice::FangOostPutDelta(S0, KArray, r, T, numU, BSCF);
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
 
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){ 
-        auto analyticDelta=BSDelta(S0, discount, KArray[i], sig*sqrt(T));
+        auto analyticDelta=BSPutDelta(S0, discount, KArray[i], sig, T);
         REQUIRE(myOptionsDelta[i]==Approx(analyticDelta).epsilon(.0001));
     }
 }
@@ -380,22 +446,6 @@ TEST_CASE("FangOosterleeCallFewK", "[OptionPricing]"){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
     auto discount=exp(-r*T);
-
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        } 
-    };
     int numU=64; //This should run extremely quickly since only have 5 strikes
     auto KArray=std::vector<double>(5, 0);
     KArray[4]=.3;
@@ -403,14 +453,13 @@ TEST_CASE("FangOosterleeCallFewK", "[OptionPricing]"){
     KArray[2]=50;//strike 50
     KArray[1]=60;//strike 60
     KArray[0]=7500;
-   
-    
+
     auto started = std::chrono::high_resolution_clock::now();
-    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, BSCF);
+    auto myOptionsPrice=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, BSCF);
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
     for(int i=1;i<4; ++i){ 
-        auto analyticOption=BS(S0, discount, KArray[i], sig*sqrt(T));
+        auto analyticOption=BSCall(S0, discount, KArray[i], sig, T);
         REQUIRE(myOptionsPrice[i]==Approx(analyticOption).epsilon(.0001));
     }
 }
@@ -422,26 +471,9 @@ TEST_CASE("FangOosterleeCallFewKLowT", "[OptionPricing]"){
    
 
     auto BSCF=[&](const auto& u){
-        //return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
         return exp(chfunctions::gaussLogCF(u, r-sig*sig*.5, sig)*T);
     };
     auto discount=exp(-r*T);
-
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        } 
-    };
     int numU=256; //This should run extremely quickly since only have 5 strikes, the higher U is to compensate for low t
     auto KArray=std::deque<double>(5, 0);
     KArray[4]=.3;
@@ -450,17 +482,14 @@ TEST_CASE("FangOosterleeCallFewKLowT", "[OptionPricing]"){
     KArray[1]=60;//strike 60
     KArray[0]=7500;
     auto started = std::chrono::high_resolution_clock::now();
-    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, BSCF);
+    auto myOptionsPrice=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, BSCF);
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
     for(int i=1;i<4; ++i){ 
-        auto analyticOption=BS(S0, discount, KArray[i], sig*sqrt(T));
+        auto analyticOption=BSCall(S0, discount, KArray[i], sig, T);
         REQUIRE(myOptionsPrice[i]==Approx(analyticOption).epsilon(.0001));
     }
 }
-
-
-
 
 
 TEST_CASE("FangOosterleePut", "[OptionPricing]"){
@@ -468,42 +497,25 @@ TEST_CASE("FangOosterleePut", "[OptionPricing]"){
     auto sig=.3;
     auto T=1.0;
     auto S0=50.0; 
-    //auto initValue=50.0;
-    
 
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
     auto discount=exp(-r*T);
 
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        } 
-    };
     double xmax=5.0;
     int numX=pow(2, 10);
     int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
     auto KArray=optionprice::getFangOostStrike(-xmax, xmax, S0, numX);
     auto started = std::chrono::high_resolution_clock::now();
-    auto myOptionsPrice=optionprice::FangOostPut(S0, KArray, numU, discount, BSCF);
+    auto myOptionsPrice=optionprice::FangOostPutPrice(S0, KArray, r, T, numU, BSCF);
     auto done = std::chrono::high_resolution_clock::now();
     std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
 
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){ 
-        auto analyticOption=BS(S0, discount, KArray[i], sig*sqrt(T))+KArray[i]*discount-S0;
+        auto analyticOption=BSPut(S0, discount, KArray[i], sig, T);
         REQUIRE(myOptionsPrice[i]==Approx(analyticOption).epsilon(.0001));
     }
 }
@@ -517,28 +529,14 @@ TEST_CASE("CarrMadanCall", "[OptionPricing]"){
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        }
-    };
+
     int numX=pow(2, 10);
     auto ada=.25;
     auto started = std::chrono::high_resolution_clock::now();
     auto myOptionsPrice=optionprice::CarrMadanCall(numX,  
         ada,
         S0, 
-        discount, 
+        r, T, 
         BSCF
     );
     auto done = std::chrono::high_resolution_clock::now();
@@ -549,7 +547,7 @@ TEST_CASE("CarrMadanCall", "[OptionPricing]"){
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
-        REQUIRE(myOptionsPrice[i]==Approx(BS(S0, discount, myXDomain[i], sig*sqrt(T))).epsilon(.0001));
+        REQUIRE(myOptionsPrice[i]==Approx(BSCall(S0, discount, myXDomain[i], sig, T)).epsilon(.0001));
     }
 }
 TEST_CASE("CarrMadanCallLowT", "[OptionPricing]"){
@@ -561,28 +559,13 @@ TEST_CASE("CarrMadanCallLowT", "[OptionPricing]"){
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        }
-    };
     int numX=pow(2, 10);
     auto ada=.25;
     auto started = std::chrono::high_resolution_clock::now();
     auto myOptionsPrice=optionprice::CarrMadanCall(numX,  
         ada,
         S0, 
-        discount, 
+        r, T, 
         BSCF
     );
     auto done = std::chrono::high_resolution_clock::now();
@@ -593,7 +576,7 @@ TEST_CASE("CarrMadanCallLowT", "[OptionPricing]"){
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
-        REQUIRE(myOptionsPrice[i]==Approx(BS(S0, discount, myXDomain[i], sig*sqrt(T))).epsilon(.0001));
+        REQUIRE(myOptionsPrice[i]==Approx(BSCall(S0, discount, myXDomain[i], sig, T)).epsilon(.0001));
     }
 }
 
@@ -607,28 +590,13 @@ TEST_CASE("CarrMadanPut", "[OptionPricing]"){
     auto BSCF=[&](const auto& u){
         return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
     };
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        }
-    };
     int numX=pow(2, 10);
     auto ada=.25;
     auto started = std::chrono::high_resolution_clock::now();
     auto myOptionsPrice=optionprice::CarrMadanPut(numX,  
         ada,
         S0, 
-        discount, 
+        r, T, 
         BSCF
     );
     auto done = std::chrono::high_resolution_clock::now();
@@ -639,7 +607,7 @@ TEST_CASE("CarrMadanPut", "[OptionPricing]"){
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
-        REQUIRE(myOptionsPrice[i]==Approx(BS(S0, discount, myXDomain[i], sig*sqrt(T))-S0+myXDomain[i]*discount).epsilon(.0001));
+        REQUIRE(myOptionsPrice[i]==Approx(BSPut(S0, discount, myXDomain[i], sig, T)).epsilon(.0001));
     }
 }
 
@@ -662,14 +630,13 @@ TEST_CASE("FangOosterleeCallCGMY", "[OptionPricing]"){
     auto G=7.08;
     auto M=29.97;
     auto Y=0.6442;
-    auto discount=exp(-r*T);
 
     auto BSCF=[&](const auto& u){
         return exp(chfunctions::cgmyLogRNCF(u, C, G, M, Y, r, sig)*T);
     };
     
     int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
-    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, BSCF);
+    auto myOptionsPrice=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, BSCF);
     auto myReference=16.212478;//https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 19
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
 
@@ -692,18 +659,15 @@ TEST_CASE("FangOosterleeCallCGMYWitht=1", "[OptionPricing]"){
     auto G=5.0;
     auto M=5.0;
     auto Y=0.5;
-    auto discount=exp(-r*T);
 
     auto BSCF=[&](const auto& u){
         return exp(chfunctions::cgmyLogRNCF(u, C, G, M, Y, r, sig)*T);
     };
     
     int numU=64; //
-    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, BSCF);
+    auto myOptionsPrice=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, BSCF);
     auto myReference=19.812948843;
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
-
-
 }
 
 
@@ -725,32 +689,14 @@ TEST_CASE("FangOosterleeCallCGMYReducesToBS", "[OptionPricing]"){
     auto M=2.5;
     auto Y=1.4;
     auto discount=exp(-r*T);
-
     auto BSCF=[&](const auto& u){
         return exp(chfunctions::cgmyLogRNCF(u, C, G, M, Y, r, sig)*T);
     };
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        }
-    };
     
     int numU=256; //higher due to low T
-    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, BSCF);
-    auto myReference=BS(S0, discount, KArray[1], sig*sqrt(T));
+    auto myOptionsPrice=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, BSCF);
+    auto myReference=BSCall(S0, discount, KArray[1], sig, T);
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
-
-
 }
 
 
@@ -778,7 +724,7 @@ TEST_CASE("FangOosterleePutCGMYWithVol", "[OptionPricing]"){
     };
     
     int numU=256; //this is high...this seems to be a computationally tricky problem
-    auto myOptionsPrice=optionprice::FangOostPut(S0, KArray, numU, discount, BSCF);
+    auto myOptionsPrice=optionprice::FangOostPutPrice(S0, KArray, r, T, numU, BSCF);
     //auto myReference=108.49914;//https://cs.uwaterloo.ca/~paforsyt/levy.pdf pg 20
     auto myReference=108.445317144;//This is what I get when I keep increasing U
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
@@ -798,7 +744,6 @@ TEST_CASE("CarrMadanCGMY", "[OptionPricing]"){
     auto G=1.4;
     auto M=2.5;
     auto Y=1.4;
-    auto discount=exp(-r*T);
 
     auto BSCF=[&](const auto& u){
         return exp(chfunctions::cgmyLogRNCF(u, C, G, M, Y, r, sig)*T);
@@ -810,7 +755,7 @@ TEST_CASE("CarrMadanCGMY", "[OptionPricing]"){
     auto myOptionsPrice=optionprice::CarrMadanPut(numX,  
         ada,
         S0, 
-        discount, 
+        r, T, 
         BSCF
     );
    
@@ -842,7 +787,6 @@ TEST_CASE("CarrMadanCGMYPut", "[OptionPricing]"){
     auto v0=1.05;
     auto adaV=.2;
     auto rho=-1.0;//-.4;//leverage rho
-    auto discount=exp(-r*T);
     auto CFCorr=[&](const auto& u){
         return exp(r*T*u+chfunctions::cirLogMGF(
             -chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, sig),
@@ -883,25 +827,25 @@ TEST_CASE("CarrMadanCGMYPut", "[OptionPricing]"){
     auto myOptionsPriceCorr=optionprice::CarrMadanPut(numX,  
         ada,
         S0, 
-        discount, 
+        r, T, 
         CFCorr
     );
     auto myOptionsPriceStoch=optionprice::CarrMadanPut(numX,  
         ada,
         S0, 
-        discount, 
+        r, T, 
         CFStoch
     );
     auto myOptionsPriceBase=optionprice::CarrMadanPut(numX,  
         ada,
         S0, 
-        discount, 
+        r, T, 
         CFBase
     );
     auto myOptionsPriceCorrBM=optionprice::CarrMadanPut(numX,  
         ada,
         S0, 
-        discount, 
+        r, T, 
         CFCorrOnlyBM
     );
    
@@ -922,7 +866,6 @@ TEST_CASE("CarrMadanCGMYPut", "[OptionPricing]"){
     REQUIRE(myOptionsPriceCorr[numX/2]==Approx(myReferenceCorr).epsilon(.0001));
     REQUIRE(myOptionsPriceStoch[numX/2]==Approx(myReferenceStoch).epsilon(.0001));
     REQUIRE(myOptionsPriceBase[numX/2]==Approx(myReferenceBase).epsilon(.0001));
-    
 
 }
 
@@ -944,7 +887,6 @@ TEST_CASE("CarrMadanHeston", "[OptionPricing]"){
     auto kappa=speed;//long run tau of 1
     auto v0Hat=v0/b;
     auto adaV=c/sqrt(b);
-    auto discount=exp(-r*T);
 
     /**These two CFs should be the same*/
     auto CFCorr=[&](const auto& u){
@@ -972,14 +914,14 @@ TEST_CASE("CarrMadanHeston", "[OptionPricing]"){
     auto myOptionsPriceCorr=optionprice::CarrMadanPut(numX,  
         ada,
         S0, 
-        discount, 
+        r, T, 
         CFCorr
     );
 
     auto myOptionsPriceCorrBM=optionprice::CarrMadanPut(numX,  
         ada,
         S0, 
-        discount, 
+        r, T, 
         CFCorrOnlyBM
     );
    
@@ -1008,7 +950,6 @@ TEST_CASE("FangOostHeston", "[OptionPricing]"){
     auto kappa=speed;//long run tau of 1
     auto v0Hat=v0/b;
     auto adaV=c/sqrt(b);
-    auto discount=exp(-r*T);
     auto CFCorr=[&](const auto& u){
         return exp(r*T*u+chfunctions::cirLogMGF(
             -chfunctions::cgmyLogRNCF(u, 0.0, 1.0, 1.0, .5, 0.0, sig),
@@ -1024,7 +965,7 @@ TEST_CASE("FangOostHeston", "[OptionPricing]"){
     KArray[1]=100;
     KArray[0]=5000;
     int numU=256; //this is high...this seems to be a computationally tricky problem
-    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, CFCorr);
+    auto myOptionsPrice=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, CFCorr);
     auto myReference= 5.78515545;
     std::cout<<myOptionsPrice[1]<<std::endl;
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
@@ -1047,8 +988,8 @@ TEST_CASE("FSTSHeston", "[OptionPricing]"){
     auto kappa=speed;//long run tau of 1
     auto v0Hat=v0/b;
     auto adaV=c/sqrt(b);
-    auto discount=[&](const auto& x){
-        return exp(-r*T);
+    auto getAssetPrice=[&](const auto& logAsset){
+        return strike*exp(logAsset);
     };
     auto CFCorr=[&](const auto& u){
         return exp(r*T*u+chfunctions::cirLogMGF(
@@ -1061,16 +1002,16 @@ TEST_CASE("FSTSHeston", "[OptionPricing]"){
         ));
     };
     int numU=256; //this is high...this seems to be a computationally tricky problem
-    auto payoff=[&](const auto& initVal, const auto& logResult, const auto& K){
-        auto assetValue=initVal*exp(logResult);
-        return assetValue>K?assetValue-K:0.0;
+    auto payoff=[&](const auto& assetValue){
+        return assetValue>strike?assetValue-strike:0.0;
     };
     int numX=pow(2, 10);
     double xmax=5.0;
     auto started = std::chrono::high_resolution_clock::now();
-    auto myOptionsPrice=optionprice::FSTS(numX, xmax, 
-        discount, 
-        [&](const auto& logR){return payoff(strike, logR, strike);}, 
+    auto myOptionsPrice=optionprice::FSTSPrice(numX, xmax, 
+        r, T,
+        getAssetPrice, 
+        payoff, 
         CFCorr
     );
     auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, strike, numX);
@@ -1081,21 +1022,6 @@ TEST_CASE("FSTSHeston", "[OptionPricing]"){
 }
 
 TEST_CASE("FangOostDegenerateBS", "[OptionPricing]"){
-    auto BS=[&](const auto &S0, const auto &discount, const auto &k, const auto &sigma){ //note that sigma includes sqrt(t) term so in vanilla BS sigma is equal to volatility*sqrt(T)
-        if(sigma>0){
-            double s=sqrt(2.0);
-            auto d1=log(S0/(discount*k))/(sigma)+sigma*.5;
-            return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigma)/s)));
-        }
-        else{
-            if(S0>k){
-                return (S0-k)*discount;
-            }
-            else{
-                return 0.0;
-            }
-        }
-    };
     auto sig=.3;
     auto r=.03;
     auto adaV=0.0;//zero, so should be BS
@@ -1120,7 +1046,7 @@ TEST_CASE("FangOostDegenerateBS", "[OptionPricing]"){
     KArray[1]=100;
     KArray[0]=5000;
     int numU=256;
-    auto myOptionsPrice=optionprice::FangOostCall(S0, KArray, numU, discount, CFCorr);
-    auto myReference= BS(S0, discount, KArray[1], sig*sqrt(T));
+    auto myOptionsPrice=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, CFCorr);
+    auto myReference= BSCall(S0, discount, KArray[1], sig, T);
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
 }

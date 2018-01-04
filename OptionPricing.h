@@ -64,22 +64,38 @@ namespace optionprice{
         return 2.0*b/numSteps;
     }
 
+    template<typename CFU>
+    auto optionPriceTransform(
+        const CFU& cfu
+    ){
+        return cfu;
+    }
+    //see, for example, Fang Oosterlee page 9
+    template<typename CFU, typename U>
+    auto optionDeltaTransform(
+        const CFU& cfu, 
+        const U& u
+    ){
+        return cfu*u;
+    }
+    //see, for example, Fang Oosterlee page 9
+    template<typename CFU, typename U>
+    auto optionGammaTransform(
+        const CFU& cfu, 
+        const U& u
+    ){
+        return cfu*(-u-u.real()*u.real());
+    }
+    /**CAREFUL!  Theta will only work for vanilla Levy processes, NOT for Levy process with stochastic time change*/
+    template<typename CFU, typename U, typename Rate>
+    auto optionThetaTransform(
+        const CFU& cfu, 
+        const U& u, const Rate& r
+    ){
+        return cfu.real()>0.0?-(log(cfu)-r)*cfu:0.0;
+    }
 
-    /**
-    Used by FSTS
-    @xMin minimum X
-    @xMax maximum X
-    @K Strike price
-    @numX number of nodes
-    @returns vector of stock or asset prices.  Note that this is different from Carr Madan which prices in terms of a vector of strike prices
-    */
-    /*template<typename Index, typename Number>
-    auto getFSTSUnderlying(const Number& xMin, const Number& xMax, const Number& K, const Index& numX){
-        auto dx=fangoost::computeDX(numX, xMin, xMax);
-        return futilities::for_each_parallel(0, numX, [&](const auto& index){
-            return K*exp(getDomain(xMin, dx, index));
-        });
-    }*/
+    
     /**
     Helper function for Fang Oosterlee
     @xMin minimum X
@@ -152,16 +168,20 @@ namespace optionprice{
         https://tspace.library.utoronto.ca/bitstream/1807/19300/1/Surkov_Vladimir_200911_PhD_Thesis.pdf
         @numSteps Discrete steps in X domain
         @xmax maximum X (in log asset space around the strike)
-        @discount function which takes the X values as input.  Can be as simple as e^-rt but can be useful for interest rate options
-        @payoff payoff function which takes the log result.  
+        @enhCF function for adjusting the type of option result.  Eg, price, delta, theta, etc
+        @tOuput function for adjusting the final output.  Eg, output is discounted or divided by S0 depending on the option result.
+        @getAssetPrice function for getting the raw asset price
+        @payoff payoff function which takes the asset price.  
         @CF characteristic function of log x around the strike
         @returns vector of prices corresponding with the assets given in getFSTSUnderlying
     */
-    template<typename Index, typename Number, typename Discount, typename Payoff, typename CF>
-    auto FSTS(
+    template<typename Index, typename Number, typename Payoff, typename EnhanceCF, typename TransformFinalOutput, typename GetAssetPrice, typename CF>
+    auto FSTSGeneric(
         const Index& numSteps, 
         const Number& xmax, 
-        Discount&& discount, 
+        EnhanceCF&& enhCF,
+        TransformFinalOutput&& tOutput,
+        GetAssetPrice&& getAssetPrice,
         Payoff&& payoff, 
         CF&& cf
     ){
@@ -172,51 +192,116 @@ namespace optionprice{
             futilities::for_each_parallel(
                 fft(
                     futilities::for_each_parallel(0, numSteps, [&](const auto& index){
-                        return std::complex<double>(payoff(fangoost::getX(-xmax, dx, index)), 0);
+                        return std::complex<double>(payoff(getAssetPrice(fangoost::getX(-xmax, dx, index))), 0);
                     })
                 ), 
-                [&](const auto& val, const auto& index){
-                    return val*cf(std::complex<double>(0, getUDomain(vmax, du, index)));
+                [&](const auto& fftPayoff, const auto& index){
+                    auto u=std::complex<double>(0, getUDomain(vmax, du, index));
+                    return fftPayoff*enhCF(cf(u), u);
                 }
             )
         );
         return futilities::for_each_parallel(0, numSteps, [&](const auto& index){
-            return discount(fangoost::getX(-xmax, dx, index))*incrementedPayoff[index].real()/numSteps;
+            return tOutput(getAssetPrice(fangoost::getX(-xmax, dx, index)), numSteps, incrementedPayoff[index].real());
         });
     }
-
-    template<typename Index, typename Number, typename Discount, typename Payoff, typename CF, typename ComputeAsset>
+    template<typename Index, typename Number, typename Payoff, typename GetAssetPrice, typename CF>
+    auto FSTSPrice(
+        const Index& numSteps, 
+        const Number& xmax, 
+        const Number& r, 
+        const Number& T, 
+        GetAssetPrice&& getAssetPrice, 
+        Payoff&& payoff, 
+        CF&& cf
+    ){
+        auto discount=exp(-r*T);
+        return FSTSGeneric(
+            numSteps, xmax, 
+            [&](const auto& cfu, const auto&u){
+                return optionPriceTransform(cfu);
+            },
+            [&](const auto& assetPrice, const auto& numSteps, const auto& payoffRaw){
+                return discount*payoffRaw/numSteps;
+            },
+            getAssetPrice,
+            payoff,
+            cf
+        );
+    }
+    template<typename Index, typename Number, typename Payoff, typename GetAssetPrice, typename CF>
     auto FSTSDelta(
         const Index& numSteps, 
         const Number& xmax, 
-        Discount&& discount, 
-        ComputeAsset&& computeAsset,
+        const Number& r, 
+        const Number& T, 
+        GetAssetPrice&& getAssetPrice, 
         Payoff&& payoff, 
         CF&& cf
     ){
-        auto dx=fangoost::computeDX(numSteps, -xmax, xmax);
-        auto vmax=M_PI/dx;
-        auto du=2.0*vmax/numSteps;
-        auto incrementedPayoff=ifft(
-            futilities::for_each_parallel(
-                fft(
-                    futilities::for_each_parallel(0, numSteps, [&](const auto& index){
-                        return std::complex<double>(payoff(fangoost::getX(-xmax, dx, index)), 0);
-                    })
-                ), 
-                [&](const auto& val, const auto& index){
-                    auto u=std::complex<double>(0, getUDomain(vmax, du, index));
-                    return u*val*cf(u);
-                }
-            )
+        auto discount=exp(-r*T);
+        return FSTSGeneric(
+            numSteps, xmax, 
+            [&](const auto& cfu, const auto&u){
+                return optionDeltaTransform(cfu, u);
+            },
+            [&](const auto& assetPrice, const auto& numSteps, const auto& payoffRaw){
+                return discount*payoffRaw/(numSteps*assetPrice);
+            },
+            getAssetPrice,
+            payoff,
+            cf
         );
-        return futilities::for_each_parallel(0, numSteps, [&](const auto& index){
-            auto x=fangoost::getX(-xmax, dx, index);
-            return discount(x)*incrementedPayoff[index].real()*computeAsset(x)/numSteps;
-        });
     }
-
-    
+    //careful with theta
+    template<typename Index, typename Number, typename Payoff, typename GetAssetPrice, typename CF>
+    auto FSTSTheta(
+        const Index& numSteps, 
+        const Number& xmax, 
+        const Number& r, 
+        const Number& T, 
+        GetAssetPrice&& getAssetPrice, 
+        Payoff&& payoff, 
+        CF&& cf
+    ){
+        auto discount=exp(-r*T);
+        return FSTSGeneric(
+            numSteps, xmax,
+            [&](const auto& cfu, const auto&u){
+                return optionThetaTransform(cfu, u, r);
+            },
+            [&](const auto& assetPrice, const auto& numSteps, const auto& payoffRaw){
+                return discount*payoffRaw/numSteps;
+            },
+            getAssetPrice,
+            payoff,
+            cf
+        );
+    }
+    template<typename Index, typename Number, typename Payoff, typename GetAssetPrice, typename CF>
+    auto FSTSGamma(
+        const Index& numSteps, 
+        const Number& xmax, 
+        const Number& r, 
+        const Number& T, 
+        GetAssetPrice&& getAssetPrice, 
+        Payoff&& payoff, 
+        CF&& cf
+    ){
+        auto discount=exp(-r*T);
+        return FSTSGeneric(
+            numSteps, xmax, 
+            [&](const auto& cfu, const auto&u){
+                return optionGammaTransform(cfu, u);
+            },
+            [&](const auto& assetPrice, const auto& numSteps, const auto& payoffRaw){
+                return discount*payoffRaw/(numSteps*assetPrice*assetPrice);
+            },
+            getAssetPrice,
+            payoff,
+            cf
+        );
+    }
 
     /**For Fang Oost (defined in the paper)*/
     template<typename A, typename B, typename C, typename D, typename U>
@@ -260,10 +345,11 @@ namespace optionprice{
         @returns vector of prices corresponding with the strikes 
         provided by FangOostCall or FangOostPut
     */
-    template<typename Index, typename Array,  typename CF, typename OutputManipulator>
+    template<typename Index, typename Array,  typename CF, typename OutputManipulator, typename EnhanceCF>
     auto FangOostGeneric(
         Array&& xValues,
         const Index& numUSteps, 
+        EnhanceCF&& enhCF,
         OutputManipulator&& mOutput,
         CF&& cf
      ){
@@ -272,7 +358,10 @@ namespace optionprice{
         auto xMax=xValues.back();
         return futilities::for_each_parallel(
             fangoost::computeExpectationVectorLevy(
-                xValues, numUSteps, cf, 
+                xValues, numUSteps, 
+                [&](const auto& u){
+                    return enhCF(cf(u), u);
+                }, 
                 [&](const auto& u, const auto& x, const auto& k){
                     return phiK(xMin, xMax, xMin, 0.0, u, k)-chiK(xMin, xMax, xMin, 0.0, u);//used for put
                 }
@@ -280,118 +369,218 @@ namespace optionprice{
             mOutput
         );
     }
-    template<typename Index, typename Array,  typename CF, typename OutputManipulator>
-    auto FangOostGenericDelta(
-        Array&& xValues,
-        const Index& numUSteps, 
-        OutputManipulator&& mOutput,
-        CF&& cf
-     ){
-         //x goes from log(S0/kmin) to log(S0/kmax)
-        auto xMin=xValues.front();
-        auto xMax=xValues.back();
-        return futilities::for_each_parallel(
-            fangoost::computeExpectationVectorLevy(
-                xValues, numUSteps, [&](const auto& u){
-                    return cf(u)*u;
-                }, 
-                [&](const auto& u, const auto& x, const auto& k){
-                    return phiK(xMin, xMax, xMin, 0.0, u, k)-chiK(xMin, xMax, xMin, 0.0, u);
-                }
-            ), 
-            mOutput
-        );
-    }
-
-    
-
     /**
-        Fang Oosterlee Approach for a PUT (better accuracy than a call...use put call parity to get back put)
+        Fang Oosterlee Approach for a Call, using put call parity to get back call from put
         http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
         @S0 value of stock
         @K stl container containing strikes to be priced..must be in DESCENDING order
+        @r risk free interest rate
+        @T maturity of the option
         @numUSteps number of steps in complex domain
-        @discount constant which is used for discounting
         @CF characteristic function of log x around the strike
         @returns vector of put prices corresponding with the K
     */
-    template<typename Index, typename Array, typename Number,  typename CF>
-    auto FangOostPut(
+    template<
+        typename Index, typename Number, 
+        typename Array, typename CF
+    >
+    auto FangOostCallPrice(
         const Number& S0,
         const Array& K,
-        const Index& numUSteps,     
-        const Number& discount,
+        const Number& r,
+        const Number& T,
+        const Index& numUSteps, 
         CF&& cf
-     ){
+    ){
+        auto discount=exp(-r*T);
         return FangOostGeneric(
             getXFromK(S0, K),
-            numUSteps,  
+            numUSteps,
+            [&](const auto& cfu, const auto& u){
+                return optionPriceTransform(cfu);
+            },
             [&](const auto& val, const auto& index){
-                return val*discount*K[index];
-            }, 
-            cf
-        );
-    }
-    template<typename Index, typename Array, typename Number,  typename CF>
-    auto FangOostPutDelta(
-        const Number& S0,
-        const Array& K,
-        const Index& numUSteps,     
-        const Number& discount,
-        CF&& cf
-     ){
-        return FangOostGenericDelta(
-            getXFromK(S0, K),
-            numUSteps,  
-            [&](const auto& val, const auto& index){
-                return val*discount*K[index]/S0;
-            }, 
+                return (val-1.0)*discount*K[index]+S0;
+            },
             cf
         );
     }
     /**
-        Fang Oosterlee Approach for a call 
+        Fang Oosterlee Approach for a Put
         http://ta.twi.tudelft.nl/mf/users/oosterle/oosterlee/COS.pdf
         @S0 value of stock
         @K stl container containing strikes to be priced..must be in DESCENDING order
+        @r risk free interest rate
+        @T maturity of the option
         @numUSteps number of steps in complex domain
-        @discount constant which is used for discounting
         @CF characteristic function of log x around the strike
-        @returns vector of call prices corresponding with the K
+        @returns vector of put prices corresponding with the K
     */
-    template<typename Index, typename Array, typename Number, typename CF>
-    auto FangOostCall(
+    template<
+        typename Index, typename Number, 
+        typename Array, typename CF
+    >
+    auto FangOostPutPrice(
         const Number& S0,
         const Array& K,
-        const Index& numUSteps,         
-        const Number& discount,
+        const Number& r,
+        const Number& T,
+        const Index& numUSteps, 
         CF&& cf
-     ){
+    ){
+        auto discount=exp(-r*T);
         return FangOostGeneric(
             getXFromK(S0, K),
-            numUSteps, 
+            numUSteps,
+            [&](const auto& cfu, const auto& u){
+                return optionPriceTransform(cfu);
+            },
             [&](const auto& val, const auto& index){
-                return (val-1.0)*discount*K[index]+S0;
-            }, 
+                return val*discount*K[index];
+            },
             cf
         );
     }
-    template<typename Index, typename Array, typename Number, typename CF>
+    template<
+        typename Index, typename Number, 
+        typename Array, typename CF
+    >
     auto FangOostCallDelta(
         const Number& S0,
         const Array& K,
-        const Index& numUSteps,         
-        const Number& discount,
+        const Number& r,
+        const Number& T,
+        const Index& numUSteps, 
         CF&& cf
-     ){
-        return FangOostGenericDelta(
+    ){
+        auto discount=exp(-r*T);
+        return FangOostGeneric(
             getXFromK(S0, K),
-            numUSteps, 
+            numUSteps,
+            [&](const auto& cfu, const auto& u){
+                return optionDeltaTransform(cfu, u);
+            },
             [&](const auto& val, const auto& index){
                 return val*discount*K[index]/S0+1.0;
-            }, 
+            },
             cf
         );
+    }
+    template<
+        typename Index, typename Number, 
+        typename Array, typename CF
+    >
+    auto FangOostPutDelta(
+        const Number& S0,
+        const Array& K,
+        const Number& r,
+        const Number& T,
+        const Index& numUSteps,
+        CF&& cf
+    ){
+        auto discount=exp(-r*T);
+        return FangOostGeneric(
+            getXFromK(S0, K),
+            numUSteps,
+            [&](const auto& cfu, const auto& u){
+                return optionDeltaTransform(cfu, u);
+            },
+            [&](const auto& val, const auto& index){
+                return val*discount*K[index]/S0;
+            },
+            cf
+        );
+    }
+
+    template<
+        typename Index, typename Number, 
+        typename Array, typename CF
+    >
+    auto FangOostCallTheta(
+        const Number& S0,
+        const Array& K,
+        const Number& r,
+        const Number& T,
+        const Index& numUSteps, 
+        CF&& cf
+    ){
+        auto discount=exp(-r*T);
+        return FangOostGeneric(
+            getXFromK(S0, K),
+            numUSteps,
+            [&](const auto& cfu, const auto& u){
+                return optionThetaTransform(cfu, u, r);
+            },
+            [&](const auto& val, const auto& index){
+                return (val-r)*discount*K[index];
+            },
+            cf
+        );
+    }
+    template<
+        typename Index, typename Number, 
+        typename Array, typename CF
+    >
+    auto FangOostPutTheta(
+        const Number& S0,
+        const Array& K,
+        const Number& r,
+        const Number& T,
+        const Index& numUSteps, 
+        CF&& cf
+    ){
+        auto discount=exp(-r*T);
+        return FangOostGeneric(
+            getXFromK(S0, K),
+            numUSteps,
+            [&](const auto& cfu, const auto& u){
+                return optionThetaTransform(cfu, u, r);
+            },
+            [&](const auto& val, const auto& index){
+                return val*discount*K[index];
+            },
+            cf
+        );
+    }
+
+    template<
+        typename Index, typename Number, 
+        typename Array, typename CF
+    >
+    auto FangOostCallGamma(
+        const Number& S0,
+        const Array& K,
+        const Number& r,
+        const Number& T,
+        const Index& numUSteps,
+        CF&& cf
+    ){
+        auto discount=exp(-r*T);
+        return FangOostGeneric(
+            getXFromK(S0, K),
+            numUSteps,
+            [&](const auto& cfu, const auto& u){
+                return optionGammaTransform(cfu, u);
+            },
+            [&](const auto& val, const auto& index){
+                return val*discount*K[index]/(S0*S0);
+            },
+            cf
+        );
+    }
+    template<
+        typename Index, typename Number, 
+        typename Array, typename CF
+    >
+    auto FangOostPutGamma(
+        const Number& S0,
+        const Array& K,
+        const Number& r,
+        const Number& T,
+        const Index& numUSteps, 
+        CF&& cf
+    ){
+        return FangOostCallGamma(S0, K, r, T, numUSteps, cf);
     }
     
     /**
@@ -421,7 +610,7 @@ namespace optionprice{
         const Number& ada, 
         const Number& alpha, 
         const Number& S0, 
-        const Number& discount, 
+        const Number& discount,
         OutputManipulator&& mOutput,
         CF&& augCF
     ){
@@ -447,16 +636,16 @@ namespace optionprice{
         const Number& ada, 
         const Number& alpha, 
         const Number& S0, 
-        const Number& discount, 
+        const Number& r,
+        const Number& T, 
         CF&& cf
     ){
-        return CarrMadanGeneric(numSteps, ada, alpha, S0, discount, 
+        return CarrMadanGeneric(numSteps, ada, alpha, S0, exp(-r*T), 
         [&](const auto& val, const auto& index){
             return val;
         }, [&](const auto& v, const auto& alpha){
             return optionprice::CallAug(v, alpha, cf);
         });
-        
     }
     template<typename Index, typename Number,  typename CF>
     auto CarrMadanPut(
@@ -464,9 +653,11 @@ namespace optionprice{
         const Number& ada, 
         const Number& alpha, 
         const Number& S0, 
-        const Number& discount, 
+        const Number& r,
+        const Number& T,
         CF&& cf
     ){
+        auto discount=exp(-r*T);
         auto b=getMaxK(ada);
         auto lambda=getLambda(numSteps, b);
         return CarrMadanGeneric(numSteps, ada, alpha, S0, discount, 
@@ -494,11 +685,12 @@ namespace optionprice{
         const Index& numSteps, 
         const Number& ada, 
         const Number& S0,
-        const Number& discount, 
+        const Number& r,
+        const Number& T, 
         CF&& augCF
     ){
         auto alpha=1.5;
-        return CarrMadanCall(numSteps, ada, alpha, S0, discount, augCF);
+        return CarrMadanCall(numSteps, ada, alpha, S0, r, T, augCF);
     }
     /**
         Carr Madan Approach for a Put 
@@ -516,11 +708,12 @@ namespace optionprice{
         const Index& numSteps, 
         const Number& ada, 
         const Number& S0,
-        const Number& discount, 
+        const Number& r,
+        const Number& T,
         CF&& augCF
     ){
         auto alpha=1.5;
-        return CarrMadanPut(numSteps, ada, alpha, S0, discount, augCF);
+        return CarrMadanPut(numSteps, ada, alpha, S0, r, T, augCF);
     }
 }
 
