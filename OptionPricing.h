@@ -84,7 +84,7 @@ namespace optionprice{
         const CFU& cfu, 
         const U& u
     ){
-        return cfu*(-u-u.real()*u.real());
+        return -cfu*(u*(1.0-u));
     }
     /**CAREFUL!  Theta will only work for vanilla Levy processes, NOT for Levy process with stochastic time change*/
     template<typename CFU, typename U, typename Rate>

@@ -26,6 +26,11 @@ double BSCallDelta(double S0, double discount, double k, double sigma, double T)
 double BSPutDelta(double S0, double discount, double k, double sigma, double T){
     return BSCallDelta(S0, discount, k, sigma, T)-1.0;
 }
+double BSGamma(double S0, double k, double sigma, double r, double T){
+    double s=sqrt(2.0);
+    auto d1=(log(S0/k)+r*T+sigma*sigma*.5*T)/(sigma*sqrt(T));
+    return exp(-d1*d1/2.0)/(s*sqrt(M_PI)*sigma*sqrt(T)*S0);
+}
 
 double BSCallTheta(double S0, double k, double sigma, double r, double T){
     double s=sqrt(2.0);
@@ -138,13 +143,51 @@ TEST_CASE("FSTSCallTheta", "OptionPricing"){
     std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
     
     auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
-    std::cout<<BSCallTheta(myXDomain[numX/2],  K, sig, r, T)<<", "<<myTheta[numX/2]<<", "<<myXDomain[numX/2]<<std::endl;
     int i=(int)numX*.3;
     int mxX=(int)numX*.7;
     for(;i<mxX; ++i){
         REQUIRE(myTheta[i]==Approx(BSCallTheta(myXDomain[i], K, sig, r, T)).epsilon(.0001));
     }
 }
+
+
+TEST_CASE("FSTSCallGamma", "OptionPricing"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto K=50.0; 
+    
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=exp(-r*T);
+
+    auto payoff=[&](const auto& assetValue){
+        return assetValue>K?assetValue-K:0.0;
+    };
+    auto getAssetPrice=[&](const auto& logAsset){
+        return K*exp(logAsset);
+    };
+    int numX=pow(2, 10);
+    double xmax=5.0;
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myGamma=optionprice::FSTSGamma(numX, xmax, 
+        r, T, 
+        getAssetPrice,
+        payoff,
+        BSCF
+    );
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "FSTS time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+    
+    auto myXDomain=optionprice::getStrikeUnderlying(-xmax, xmax, K, numX);
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){
+        REQUIRE(myGamma[i]==Approx(BSGamma(myXDomain[i], K, sig, r, T)).epsilon(.0001));
+    }
+}
+
 
 TEST_CASE("FSTSPut", "OptionPricing"){
     auto r=.05;
@@ -376,6 +419,58 @@ TEST_CASE("FangOosterleeCallTheta", "[OptionPricing]"){
     for(;i<mxX; ++i){ 
         auto analyticTheta=BSCallTheta(S0, KArray[i], sig, r, T);
         REQUIRE(myOptionsTheta[i]==Approx(analyticTheta).epsilon(.0001));
+    }
+}
+TEST_CASE("FangOosterleeCallGamma", "[OptionPricing]"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto S0=50.0; 
+   
+
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=exp(-r*T);
+    double xmax=5.0;
+    int numX=pow(2, 10);
+    int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
+    auto KArray=optionprice::getFangOostStrike(-xmax, xmax, S0, numX);
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myOptionsGamma=optionprice::FangOostCallGamma(S0, KArray, r, T, numU, BSCF);
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){ 
+        auto analyticGamma=BSGamma(S0, KArray[i], sig, r, T);
+        REQUIRE(myOptionsGamma[i]==Approx(analyticGamma).epsilon(.0001));
+    }
+}
+//rather unecessary, but whatever
+TEST_CASE("FangOosterleePutGamma", "[OptionPricing]"){
+    auto r=.05;
+    auto sig=.3;
+    auto T=1.0;
+    auto S0=50.0; 
+
+    auto BSCF=[&](const auto& u){
+        return chfunctions::gaussCF(u, (r-sig*sig*.5)*T, sig*sqrt(T));
+    };
+    auto discount=exp(-r*T);
+    double xmax=5.0;
+    int numX=pow(2, 10);
+    int numU=64; //this will be slightly slower than Carr madan or FSTS....since carr and madan run in nlogn where n=1024 and 64 is roughly 10 times larger than log(1024)
+    auto KArray=optionprice::getFangOostStrike(-xmax, xmax, S0, numX);
+    auto started = std::chrono::high_resolution_clock::now();
+    auto myOptionsGamma=optionprice::FangOostPutGamma(S0, KArray, r, T, numU, BSCF);
+    auto done = std::chrono::high_resolution_clock::now();
+    std::cout << "Fang Oosterlee time: "<<std::chrono::duration_cast<std::chrono::milliseconds>(done-started).count()<<std::endl;
+    int i=(int)numX*.3;
+    int mxX=(int)numX*.7;
+    for(;i<mxX; ++i){ 
+        auto analyticGamma=BSGamma(S0, KArray[i], sig, r, T);
+        REQUIRE(myOptionsGamma[i]==Approx(analyticGamma).epsilon(.0001));
     }
 }
 TEST_CASE("FangOosterleePutTheta", "[OptionPricing]"){
