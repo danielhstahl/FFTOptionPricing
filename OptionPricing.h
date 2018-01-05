@@ -218,7 +218,7 @@ namespace optionprice{
         auto discount=exp(-r*T);
         return FSTSGeneric(
             numSteps, xmax, 
-            [&](const auto& cfu, const auto&u){
+            [](const auto& cfu, const auto&u){
                 return optionPriceTransform(cfu);
             },
             [&](const auto& assetPrice, const auto& numSteps, const auto& payoffRaw){
@@ -242,7 +242,7 @@ namespace optionprice{
         auto discount=exp(-r*T);
         return FSTSGeneric(
             numSteps, xmax, 
-            [&](const auto& cfu, const auto&u){
+            [](const auto& cfu, const auto&u){
                 return optionDeltaTransform(cfu, u);
             },
             [&](const auto& assetPrice, const auto& numSteps, const auto& payoffRaw){
@@ -291,7 +291,7 @@ namespace optionprice{
         auto discount=exp(-r*T);
         return FSTSGeneric(
             numSteps, xmax, 
-            [&](const auto& cfu, const auto&u){
+            [](const auto& cfu, const auto&u){
                 return optionGammaTransform(cfu, u);
             },
             [&](const auto& assetPrice, const auto& numSteps, const auto& payoffRaw){
@@ -396,7 +396,7 @@ namespace optionprice{
         return FangOostGeneric(
             getXFromK(S0, K),
             numUSteps,
-            [&](const auto& cfu, const auto& u){
+            [](const auto& cfu, const auto& u){
                 return optionPriceTransform(cfu);
             },
             [&](const auto& val, const auto& index){
@@ -432,7 +432,7 @@ namespace optionprice{
         return FangOostGeneric(
             getXFromK(S0, K),
             numUSteps,
-            [&](const auto& cfu, const auto& u){
+            [](const auto& cfu, const auto& u){
                 return optionPriceTransform(cfu);
             },
             [&](const auto& val, const auto& index){
@@ -457,7 +457,7 @@ namespace optionprice{
         return FangOostGeneric(
             getXFromK(S0, K),
             numUSteps,
-            [&](const auto& cfu, const auto& u){
+            [](const auto& cfu, const auto& u){
                 return optionDeltaTransform(cfu, u);
             },
             [&](const auto& val, const auto& index){
@@ -482,7 +482,7 @@ namespace optionprice{
         return FangOostGeneric(
             getXFromK(S0, K),
             numUSteps,
-            [&](const auto& cfu, const auto& u){
+            [](const auto& cfu, const auto& u){
                 return optionDeltaTransform(cfu, u);
             },
             [&](const auto& val, const auto& index){
@@ -559,7 +559,7 @@ namespace optionprice{
         return FangOostGeneric(
             getXFromK(S0, K),
             numUSteps,
-            [&](const auto& cfu, const auto& u){
+            [](const auto& cfu, const auto& u){
                 return optionGammaTransform(cfu, u);
             },
             [&](const auto& val, const auto& index){
