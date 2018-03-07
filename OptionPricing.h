@@ -9,29 +9,7 @@
 #include "RungeKutta.h"
 #include "fft.h"
 namespace optionprice{
-    /**
-    Used by FSTS method
-    @xDiscrete Number of nodes used to discretize X
-    @xMin minimum x
-    @xMax maximum x
-    @returns the distance between nodes
-    */
-    /*template<typename Index, typename Number>
-    auto computeDX(const Index& xDiscrete, const Number& xMin,const Number& xMax){
-        return (xMax-xMin)/(xDiscrete-1.0);
-    }*/
-    /**
-    Used by FSTS method
-    @xMin minimum x
-    @xMax distance between nodes, eg from computeDX
-    @index index of the node
-    @returns value at the node index
-    */
-    /*template<typename Index, typename Number>
-    auto getDomain(const Number& xMin, const Number& dx, const Index& index){
-        return xMin+index*dx;
-    }*/
-
+   
     /**
     Used by FSTS method.  This wraps back around when reaches a certain level.  
     @uMax maximum u
@@ -224,9 +202,9 @@ namespace optionprice{
             [&](const auto& assetPrice, const auto& numSteps, const auto& payoffRaw){
                 return discount*payoffRaw/numSteps;
             },
-            getAssetPrice,
-            payoff,
-            cf
+            std::move(getAssetPrice),
+            std::move(payoff),
+            std::move(cf)
         );
     }
     template<typename Index, typename Number, typename Payoff, typename GetAssetPrice, typename CF>
@@ -248,9 +226,9 @@ namespace optionprice{
             [&](const auto& assetPrice, const auto& numSteps, const auto& payoffRaw){
                 return discount*payoffRaw/(numSteps*assetPrice);
             },
-            getAssetPrice,
-            payoff,
-            cf
+            std::move(getAssetPrice),
+            std::move(payoff),
+            std::move(cf)
         );
     }
     //careful with theta
@@ -273,9 +251,9 @@ namespace optionprice{
             [&](const auto& assetPrice, const auto& numSteps, const auto& payoffRaw){
                 return discount*payoffRaw/numSteps;
             },
-            getAssetPrice,
-            payoff,
-            cf
+            std::move(getAssetPrice),
+            std::move(payoff),
+            std::move(cf)
         );
     }
     template<typename Index, typename Number, typename Payoff, typename GetAssetPrice, typename CF>
@@ -297,9 +275,9 @@ namespace optionprice{
             [&](const auto& assetPrice, const auto& numSteps, const auto& payoffRaw){
                 return discount*payoffRaw/(numSteps*assetPrice*assetPrice);
             },
-            getAssetPrice,
-            payoff,
-            cf
+            std::move(getAssetPrice),
+            std::move(payoff),
+            std::move(cf)
         );
     }
 
@@ -358,7 +336,7 @@ namespace optionprice{
         auto xMax=xValues.back();
         return futilities::for_each_parallel(
             fangoost::computeExpectationVectorLevy(
-                xValues, numUSteps, 
+                std::move(xValues), numUSteps, 
                 [&](const auto& u){
                     return enhCF(cf(u), u);
                 }, 
@@ -366,7 +344,7 @@ namespace optionprice{
                     return phiK(xMin, xMax, xMin, 0.0, u, k)-chiK(xMin, xMax, xMin, 0.0, u);//used for put
                 }
             ), 
-            mOutput
+            std::move(mOutput)
         );
     }
     /**
@@ -402,7 +380,7 @@ namespace optionprice{
             [&](const auto& val, const auto& index){
                 return (val-1.0)*discount*K[index]+S0;
             },
-            cf
+            std::move(cf)
         );
     }
     /**
@@ -438,7 +416,7 @@ namespace optionprice{
             [&](const auto& val, const auto& index){
                 return val*discount*K[index];
             },
-            cf
+            std::move(cf)
         );
     }
     template<
@@ -463,7 +441,7 @@ namespace optionprice{
             [&](const auto& val, const auto& index){
                 return val*discount*K[index]/S0+1.0;
             },
-            cf
+            std::move(cf)
         );
     }
     template<
@@ -488,7 +466,7 @@ namespace optionprice{
             [&](const auto& val, const auto& index){
                 return val*discount*K[index]/S0;
             },
-            cf
+            std::move(cf)
         );
     }
 
@@ -514,7 +492,7 @@ namespace optionprice{
             [&](const auto& val, const auto& index){
                 return (val-r)*discount*K[index];
             },
-            cf
+            std::move(cf)
         );
     }
     template<
@@ -539,7 +517,7 @@ namespace optionprice{
             [&](const auto& val, const auto& index){
                 return val*discount*K[index];
             },
-            cf
+            std::move(cf)
         );
     }
 
@@ -565,7 +543,7 @@ namespace optionprice{
             [&](const auto& val, const auto& index){
                 return val*discount*K[index]/(S0*S0);
             },
-            cf
+            std::move(cf)
         );
     }
     template<
@@ -580,14 +558,14 @@ namespace optionprice{
         const Index& numUSteps, 
         CF&& cf
     ){
-        return FangOostCallGamma(S0, K, r, T, numUSteps, cf);
+        return FangOostCallGamma(S0, K, r, T, numUSteps, std::move(cf));
     }
     
     /**
     Used for Carr-Madan call option http://engineering.nyu.edu/files/jcfpub.pdf
     */
     template<typename Number1, typename Number2,  typename CF>
-    auto CallAug(const Number1& v, const Number2& alpha, CF& cf){ //used for Carr-Madan approach...v is typically complex
+    auto CallAug(const Number1& v, const Number2& alpha, CF&& cf){ //used for Carr-Madan approach...v is typically complex
         return cf(v+(alpha+1.0))/(alpha*alpha+alpha+v*v+(2*alpha+1)*v);
     }
     
@@ -644,7 +622,7 @@ namespace optionprice{
         [&](const auto& val, const auto& index){
             return val;
         }, [&](const auto& v, const auto& alpha){
-            return optionprice::CallAug(v, alpha, cf);
+            return optionprice::CallAug(v, alpha, std::move(cf));
         });
     }
     template<typename Index, typename Number,  typename CF>
@@ -664,7 +642,7 @@ namespace optionprice{
         [&](const auto& val, const auto& index){
             return val-S0+getCarrMadanKAtIndex(b, lambda, S0, index)*discount;
         }, [&](const auto& v, const auto& alpha){
-            return optionprice::CallAug(v, alpha, cf);
+            return optionprice::CallAug(v, alpha, std::move(cf));
         });
     }
     
@@ -690,7 +668,7 @@ namespace optionprice{
         CF&& augCF
     ){
         auto alpha=1.5;
-        return CarrMadanCall(numSteps, ada, alpha, S0, r, T, augCF);
+        return CarrMadanCall(numSteps, ada, alpha, S0, r, T, std::move(augCF));
     }
     /**
         Carr Madan Approach for a Put 
@@ -713,7 +691,7 @@ namespace optionprice{
         CF&& augCF
     ){
         auto alpha=1.5;
-        return CarrMadanPut(numSteps, ada, alpha, S0, r, T, augCF);
+        return CarrMadanPut(numSteps, ada, alpha, S0, r, T, std::move(augCF));
     }
 }
 
