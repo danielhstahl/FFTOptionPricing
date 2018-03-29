@@ -8,7 +8,7 @@
 #include <deque>
 #include <iostream>
 #include "CharacteristicFunctions.h"
-
+#include "OptionCalibration.h"
 double BSCall(double S0, double discount, double k, double sigma, double T){
     double s=sqrt(2.0);
     double sigmasqrt=sqrt(T)*sigma;
@@ -1144,4 +1144,16 @@ TEST_CASE("FangOostDegenerateBS", "[OptionPricing]"){
     auto myOptionsPrice=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, CFCorr);
     auto myReference= BSCall(S0, discount, KArray[1], sig, T);
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
+}
+
+TEST_CASE("generateFOEstimate returns reasonable parameters", "[OptionCalibration]"){
+    std::vector<double> strikes={5, 10, 15};
+    std::vector<double> options={4, 2, 1};
+
+    double stock=10;
+    double discount=1;
+
+    const auto resultFn=optioncal::generateFOEstimate(strikes, options, stock, discount);
+    const auto valAt=resultFn(.2);
+    std::cout<<valAt<<std::endl;
 }
