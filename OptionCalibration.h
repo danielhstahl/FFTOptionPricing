@@ -33,34 +33,37 @@ namespace optioncal{
     auto xJ(const AssetValue& stock, const Strike& strike, const Discount& discount){
         return log(strike*discount/stock);
     }
+    template<typename T>
+    auto maxZeroOrNumber(const T& num){
+        return num>0.0?num:T(0.0);
+    }
+
     constexpr int XJ=0;
     constexpr int OJ=1;
     /**
      * Tuple is a std::tuple of x_j (knots) and O_j (gammas)
      * U is not complex
      * */
-    template<typename U, typename Tuple>
-    auto fSpline(const U& u, const std::vector<Tuple>& knots_gamma){
-        
-        const int startFrom=1;
-        const int endFrom=1;
-
-
+    constexpr int KNOT=0;
+    constexpr int GAMMA=1;
+    /**
+     * Tuple is a std::tuple of x_j (knots) and O_j (gammas)
+     * */
+    template<typename T, typename Tuple>
+    auto fSpline(const T& x, const std::vector<Tuple>& knots_gamma){
+        const auto minDiff=x-std::get<KNOT>(knots_gamma.front());//difference between given x and first knot
+        const auto maxDiff=std::get<KNOT>(knots_gamma.back())-x;//difference between last knot and given x
+        const auto span=std::get<KNOT>(knots_gamma.back())-std::get<KNOT>(knots_gamma.front());//span of knots
+        const auto tripleMin=futilities::const_power(maxZeroOrNumber(minDiff), 3); //minDiff^3, if minDiff>0 else 0
+        const auto tripleMax=futilities::const_power(maxZeroOrNumber(maxDiff), 3);//maxDiff^3, if minDiff>0 else 0
+        int startFrom=1;
+        int endFrom=1;
         return futilities::sum_subset(knots_gamma, startFrom, endFrom, [&](const auto& tuple, const auto& index){
-            const auto currX=std::get<XJ>(tuple);
-            const auto prevX=std::get<XJ>(knots_gamma[index-1]);
-            const auto nextX=std::get<XJ>(knots_gamma[index+1]);
-            const auto currO=std::get<OJ>(tuple);
-
-            const auto currExp=exp(std::complex<U>(0.0, currX));
-            const auto prevExp=exp(std::complex<U>(0.0, prevX));
-            const auto nextExp=exp(std::complex<U>(0.0, nextX));
-
-            //equation 3.10
-            const auto retVal=currO*((currExp-prevExp)/(currX-prevX)-(nextExp-currExp)/(nextX-currX))/(u*u);
-            //find the "j0" and "j0-1"
-            return currX<0&&nextX>=0?retVal+(1.0+(nextExp*currX-currExp*nextX)/(nextX-currX))/(u*u):retVal;
-        });
+            const auto lambda=(std::get<KNOT>(knots_gamma.back())-std::get<KNOT>(tuple))/span;
+            const auto currDiff=x-std::get<KNOT>(tuple);//difference between given x and first knot
+            const auto tripleCurr=futilities::const_power(maxZeroOrNumber(minDiff), 3); //minDiff^3, if minDiff>0 else 0
+            return (tripleCurr+maxDiff*(lambda-1)-minDiff*lambda)*std::get<GAMMA>(knots_gamma[index+1]);
+        })+std::get<GAMMA>(knots_gamma.front())+std::get<GAMMA>(knots_gamma[1])*x;
     }
 
    /* template<typename Strike, typename MarketPrice, typename AssetValue, typename Discount>
