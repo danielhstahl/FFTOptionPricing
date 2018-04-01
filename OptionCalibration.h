@@ -6,7 +6,6 @@
 #include "FunctionalUtilities.h"
 #include "fft.h"
 #include <tuple>
-#include "spline.h"
 #include "Newton.h"
 /**
  * Optimization specific
