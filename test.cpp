@@ -1149,11 +1149,8 @@ TEST_CASE("FangOostDegenerateBS", "[OptionPricing]"){
 TEST_CASE("generateFOEstimate returns reasonable parameters", "[OptionCalibration]"){
     std::vector<double> strikes={5, 10, 15};
     std::vector<double> options={4, 2, 1};
-
-    double stock=10;
-    double discount=1;
-
-    const auto resultFn=optioncal::generateFOEstimate(strikes, options, stock, discount);
-    const auto valAt=resultFn(.2);
-    std::cout<<valAt<<std::endl;
+    const auto resultFn=optioncal::generateFOEstimate(strikes, options, 10.0);
+    const auto valAt=resultFn(5.0); 
+    REQUIRE(valAt==Approx(strikes[0]).epsilon(.000001));
+    //REQUIRE(valAt==Approx(strikes[0]).epsilon(.000001));
 }

@@ -11,9 +11,6 @@
 
 typedef std::complex<double> Complex;
 typedef std::vector<Complex> CArray;
- 
-//CArray fft(CArray&&);
-//CArray ifft(CArray&&);
-//void fft(int, std::vector<Complex>&);
+
 #include "fft.hpp"
 #endif

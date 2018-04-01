@@ -75,33 +75,42 @@ namespace optioncal{
     }*/
     
     /**STRIKES NEEDS TO BE IN ORDER!!*/
-    template<typename Strike, typename MarketPrice, typename AssetValue, typename Discount>
-    auto generateFOEstimate(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount){
+    template<typename Strike, typename MarketPrice>
+    auto generateFOEstimate(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const Asset& stock){
         int numStrikes=strikes.size();
-        auto xV=futilities::for_each_parallel_copy(strikes, [&](const auto& strike, const auto& index){
-            return xJ(stock, strike, discount); 
-        });
-        auto oV=futilities::for_each_parallel_copy(strikes, [&](const auto& strike, const auto& index){
-            return oJ(options[index], stock, strike, discount);
-        });
-
-
         auto knots_gamma_tmp=futilities::for_each_parallel(0, numStrikes, [&](const auto& index){
-            const auto xj=xJ(stock, strikes[index], discount);
-            return std::make_tuple(xJ(stock, strikes[index], discount), oJ(options[index], stock, strikes[index], discount));
+            return std::make_tuple(strikes[index], options[index]);
         });
-        const auto firstX=std::get<XJ>(knots_gamma_tmp.front());
-        const auto lastX=std::get<XJ>(knots_gamma_tmp.back());
-        const double incrementX=.05;//arbitrary
         knots_gamma_tmp.insert(
             knots_gamma_tmp.begin(), 
-            std::make_tuple(firstX-incrementX,0.0)
+            std::make_tuple(0.0,stock)//at k=0, the call equals the stock
         );
-        knots_gamma_tmp.emplace_back(std::make_tuple(lastX+incrementX,0.0));
+        constexpr double upperBound=100;//arbitrary
+        knots_gamma_tmp.emplace_back(std::make_tuple(options.back()*upperBound,0.0)); //at large values of strike, option is zero
 
-        return [knots_gamma = std::move(knots_gamma_tmp)](const auto& u){
-            return fSpline(u, knots_gamma);
+        return [knots_gamma = std::move(knots_gamma_tmp)](const auto& callPrice){
+            return fSpline(callPrice, knots_gamma);
         };
+    }
+
+    template<typename IFS, typename Discount>
+    auto getCFFromMarketData(const IFS& instSpline, const std::vector<MarketPrice>& options, const Discount& discount, int N){
+        constexpr double upperBound=100;//arbitrary...this may be too high
+        const maxStrike=options.back()*upperBound;
+        const double dk=maxStrike/N;
+        const double du=2.0*M_PI/maxStrike; ///may want to compute this outside thsi function since this will be needed to discretize the CF
+        ///this should be min and max of call options.  The result iof the fft should be an approximate CF
+        return futilities::for_each_parallel(
+            ifft(futilities::for_each_parallel(0, N, [&](const auto& index){
+                auto pm=index%2==0?-1.0:1.0; //simpson's rule
+                auto currK=dk*index;
+                return instSpline(currK)*currK*currK*(3.0+pm)/3.0;
+            })),
+            [&](const auto& xn, const auto& index){
+                auto currU=du*index;
+                return currU*currU*xn;
+            }
+        );
     }
     
 
