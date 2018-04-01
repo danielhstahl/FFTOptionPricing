@@ -1249,7 +1249,7 @@ TEST_CASE("cal", "[OptionCalibration]"){
         [&](const auto& u, const auto& sigma){
             return u*(r-sigma*sigma*.5)*T*std::complex<double>(0.0, 1.0)-sigma*sigma*.5*T*u*u;
         },
-        getU(30)
+        getU(20)
     );
     auto guess=.2;
     auto results=optioncal::calibrate(objFn, guess);

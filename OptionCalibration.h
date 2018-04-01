@@ -174,8 +174,9 @@ namespace optioncal{
     auto calibrate(const FN& fn, const Params&... params){
         const int maxIter=50;
         const double prec=.00001;
-        const double alpha=.0001;
-        return newton::gradientDescentApprox(fn, maxIter, prec, alpha, params...);
+        const double peterb=.000001;
+        const double alpha=.0001; //needs a very small step or it goes off to no where
+        return newton::gradientDescentApprox(fn, maxIter, prec, peterb, alpha, params...);
     }
 
         
