@@ -49,11 +49,13 @@ auto genericfft(CArray&& x, Complex&& phiT, int N){
 auto ifft(CArray&& x){
   unsigned int N = x.size();
   double thetaT = M_PI / N;
-  return std::move(genericfft(std::move(x), Complex(cos(thetaT), sin(thetaT), N)));
+  x=genericfft(std::move(x), Complex(cos(thetaT), sin(thetaT)), N);
+  return std::move(x);
 }
 
 auto fft(CArray&& x){
   unsigned int N = x.size();
   double thetaT = M_PI / N;
-  return std::move(genericfft(std::move(x), Complex(cos(thetaT), sin(-thetaT), N)));
+  x=genericfft(std::move(x), Complex(cos(thetaT), sin(-thetaT)), N);
+  return std::move(x);
 }

@@ -23,4 +23,7 @@ cloneAndCheckout CharacteristicFunctions 0dfefb3dc845d40ae94b70edb23cf6301bd6df1
 cloneAndCheckout FangOost 5919d52d5a59b317878b61115acd6cda3a91b97f
 
 cloneAndCheckout RungeKutta 6326974b245199852a1f00fccb4b677180ffc6d4
+cloneAndCheckout GaussNewton
+cloneAndCheckout TupleUtilities
+cloneAndCheckout AutoDiff
 

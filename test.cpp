@@ -1145,12 +1145,173 @@ TEST_CASE("FangOostDegenerateBS", "[OptionPricing]"){
     auto myReference= BSCall(S0, discount, KArray[1], sig, T);
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
 }
-
-TEST_CASE("generateFOEstimate returns reasonable parameters", "[OptionCalibration]"){
+/*
+TEST_CASE("generateFOEstimate returns correct parameters", "[OptionCalibration]"){
     std::vector<double> strikes={5, 10, 15};
     std::vector<double> options={4, 2, 1};
-    const auto resultFn=optioncal::generateFOEstimate(strikes, options, 10.0);
-    const auto valAt=resultFn(5.0); 
-    REQUIRE(valAt==Approx(strikes[0]).epsilon(.000001));
-    //REQUIRE(valAt==Approx(strikes[0]).epsilon(.000001));
+    const double maxStrike=100;
+    const auto resultFn=optioncal::generateFOEstimate(strikes, options, 10.0, maxStrike);
+    const auto valAt5=resultFn(log(strikes[0])); 
+    REQUIRE(valAt5==Approx(options[0]).epsilon(.000001));
+    const auto valAt10=resultFn(log(strikes[1])); 
+    REQUIRE(valAt10==Approx(options[1]).epsilon(.000001));
+}*/
+
+
+TEST_CASE("test xJ", "[OptionCalibration]"){
+    double maxStrike=100;
+    double stock=10;
+    std::cout<<"min xJ: "<<optioncal::xJ(stock, 1/maxStrike, 1.0)<<std::endl;
+    std::cout<<"max xJ: "<<optioncal::xJ(stock, maxStrike, 1.0)<<std::endl;
+    
 }
+
+TEST_CASE("cfHat", "[OptionCalibration]"){
+    double stock=10.0;
+    double discount=1.0;
+    double sigma=.3;
+    double T=1.0;
+    double r=-log(discount)/T;
+    std::vector<double> strikes={4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    auto optionPrices=futilities::for_each_parallel_copy(strikes, [&](const auto& k, const auto& index){
+        return BSCall(stock, discount, k, sigma, T);
+    });
+    double maxStrike=100;
+    auto estimateOfPhi=optioncal::generateFOEstimate(strikes, optionPrices, stock, discount, maxStrike);
+    int N=20;
+    double du= 2*M_PI/N;
+    auto myCf=[&](const auto& u){
+        return u*(r-sigma*sigma*.5)*T*std::complex<double>(0.0, 1.0)-sigma*sigma*.5*T*u*u;
+    };
+    //auto estimateOfPhi=optioncal::cfHat(ispline, discount, maxStrike, dk, du, N);
+    for(int i=1; i<N; ++i){
+        std::cout<<"phiHat at "<<i<<": "<<estimateOfPhi(i*du)<<std::endl;
+        std::cout<<"phi at "<<i<<": "<<myCf(i*du-std::complex<double>(0, 1.0))<<std::endl;
+        //std::cout<<"phi2 at "<<i<<": "<<-sigma*sigma*i*du*i*du*.5+i*du*std::complex<double>(0, 1)*(r+sigma*sigma*.5)+r<<std::endl;
+    }
+}
+TEST_CASE("objFn", "[OptionCalibration]"){
+    double stock=10.0;
+    double discount=1.0;
+    double sigma=.3;
+    double T=1.0;
+    double r=-log(discount)/T;
+    std::vector<double> strikes={4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    auto optionPrices=futilities::for_each_parallel_copy(strikes, [&](const auto& k, const auto& index){
+        return BSCall(stock, discount, k, sigma, T);
+    });
+    double maxStrike=100;
+    auto estimateOfPhi=optioncal::generateFOEstimate(strikes, optionPrices, stock, discount, maxStrike);
+    //int N=20;
+    
+    //auto myCf=
+    auto getU=[](const auto& N){
+        double du= 2*M_PI/N;
+        return futilities::for_each_parallel(1, N, [&](const auto& index){
+            return index*du;
+        });
+    };
+    auto objFn=optioncal::getObjFn(
+        std::move(estimateOfPhi),
+        [&](const auto& u, const auto& sigma){
+            return u*(r-sigma*sigma*.5)*T*std::complex<double>(0.0, 1.0)-sigma*sigma*.5*T*u*u;
+        },
+        getU(30)
+    );
+    std::cout<<"guess=.4: "<<objFn(.4)<<std::endl;
+    std::cout<<"guess=.3: "<<objFn(.3)<<std::endl;
+    std::cout<<"guess=-3000000000: "<<objFn(-3000000000.0)<<std::endl;
+    
+}
+TEST_CASE("cal", "[OptionCalibration]"){
+    double stock=10.0;
+    double discount=1.0;
+    double sigma=.3;
+    double T=1.0;
+    double r=-log(discount)/T;
+    std::vector<double> strikes={4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    auto optionPrices=futilities::for_each_parallel_copy(strikes, [&](const auto& k, const auto& index){
+        return BSCall(stock, discount, k, sigma, T);
+    });
+    double maxStrike=100;
+    auto estimateOfPhi=optioncal::generateFOEstimate(strikes, optionPrices, stock, discount, maxStrike);
+    //int N=20;
+    
+    //auto myCf=
+    auto getU=[](const auto& N){
+        double du= 2*M_PI/N;
+        return futilities::for_each_parallel(1, N, [&](const auto& index){
+            return index*du;
+        });
+    };
+    auto objFn=optioncal::getObjFn(
+        std::move(estimateOfPhi),
+        [&](const auto& u, const auto& sigma){
+            return u*(r-sigma*sigma*.5)*T*std::complex<double>(0.0, 1.0)-sigma*sigma*.5*T*u*u;
+        },
+        getU(30)
+    );
+    auto guess=.2;
+    auto results=optioncal::calibrate(objFn, guess);
+    std::cout<<"optimal sigma: "<<std::get<0>(results)<<std::endl;
+    
+}
+
+
+/*
+TEST_CASE("cfHat", "[OptionCalibration]"){
+    double stock=10.0;
+    double discount=1.0;
+    double sigma=.3;
+    double T=1.0;
+    double r=-log(discount)/T;
+    std::vector<double> strikes={4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    auto optionPrices=futilities::for_each_parallel_copy(strikes, [&](const auto& k, const auto& index){
+        return BSCall(stock, discount, k, sigma, T);
+    });
+    double maxStrike=100;
+    auto ispline=optioncal::generateFOEstimate(strikes, optionPrices, stock, maxStrike);
+    int N=256;
+    
+    double dk, du;
+    std::tie(dk, du)=optioncal::getDKandDU(N, maxStrike);
+    auto estimateOfPhi=optioncal::cfHat(ispline, discount, maxStrike, dk, du, N);
+    for(int i=1; i<estimateOfPhi.size(); ++i){
+        std::cout<<"phiHat at "<<i<<": "<<log(estimateOfPhi[i])<<std::endl;
+        std::cout<<"phi at "<<i<<": "<<std::complex<double>(0.0, du*i)*(r-sigma*sigma*.5)*T-sigma*sigma*.5*T*du*i*du*i<<std::endl;
+    }
+}*/
+/*
+TEST_CASE("cfHat returns CF that can calibrate", "[OptionCalibration]"){
+
+    double stock=10.0;
+    double discount=1.0;
+    double sigma=.3;
+    double T=1.0;
+    double r=-log(discount)/T;
+    std::vector<double> strikes={4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+    auto optionPrices=futilities::for_each_parallel_copy(strikes, [&](const auto& k, const auto& index){
+        return BSCall(stock, discount, k, sigma, T);
+    });
+    double maxStrike=100;
+    auto ispline=optioncal::generateFOEstimate(strikes, optionPrices, stock, maxStrike);
+
+    int N=256;
+    
+    std::cout<<"Bs at 500: "<<BSCall(stock, discount, maxStrike, sigma, T)<<std::endl;
+    double dk, du;
+    std::tie(dk, du)=optioncal::getDKandDU(N, maxStrike);
+    std::cout<<"dk: "<<dk<<std::endl;
+    std::cout<<"du: "<<du<<std::endl;
+    auto objFn=optioncal::getObjFn(
+        optioncal::cfHat(ispline, discount, maxStrike, dk, du, N),
+        [&](const auto& u, const auto& sigma){
+            return std::complex<double>(0.0, u)*(r-sigma*sigma*.5)*T-sigma*sigma*.5*T*u*u;
+        },
+        du
+    );
+    double sigmaGuess=.3;
+    std::cout<<"obj at .4: "<<objFn(sigmaGuess)<<std::endl;
+    //auto results=optioncal::calibrate(objFn, sigmaGuess);
+    //REQUIRE(std::get<0>(results)==Approx(sigma));
+}*/
