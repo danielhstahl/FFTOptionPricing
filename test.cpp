@@ -1145,17 +1145,6 @@ TEST_CASE("FangOostDegenerateBS", "[OptionPricing]"){
     auto myReference= BSCall(S0, discount, KArray[1], sig, T);
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
 }
-/*
-TEST_CASE("generateFOEstimate returns correct parameters", "[OptionCalibration]"){
-    std::vector<double> strikes={5, 10, 15};
-    std::vector<double> options={4, 2, 1};
-    const double maxStrike=100;
-    const auto resultFn=optioncal::generateFOEstimate(strikes, options, 10.0, maxStrike);
-    const auto valAt5=resultFn(log(strikes[0])); 
-    REQUIRE(valAt5==Approx(options[0]).epsilon(.000001));
-    const auto valAt10=resultFn(log(strikes[1])); 
-    REQUIRE(valAt10==Approx(options[1]).epsilon(.000001));
-}*/
 
 
 TEST_CASE("test xJ", "[OptionCalibration]"){
@@ -1165,7 +1154,7 @@ TEST_CASE("test xJ", "[OptionCalibration]"){
     std::cout<<"max xJ: "<<optioncal::xJ(stock, maxStrike, 1.0)<<std::endl;
     
 }
-
+/*
 TEST_CASE("cfHat", "[OptionCalibration]"){
     double stock=10.0;
     double discount=1.0;
@@ -1189,7 +1178,7 @@ TEST_CASE("cfHat", "[OptionCalibration]"){
         std::cout<<"phi at "<<i<<": "<<myCf(i*du-std::complex<double>(0, 1.0))<<std::endl;
         //std::cout<<"phi2 at "<<i<<": "<<-sigma*sigma*i*du*i*du*.5+i*du*std::complex<double>(0, 1)*(r+sigma*sigma*.5)+r<<std::endl;
     }
-}
+}*/
 TEST_CASE("objFn", "[OptionCalibration]"){
     double stock=10.0;
     double discount=1.0;
@@ -1220,10 +1209,8 @@ TEST_CASE("objFn", "[OptionCalibration]"){
     );
     std::cout<<"guess=.4: "<<objFn(.4)<<std::endl;
     std::cout<<"guess=.3: "<<objFn(.3)<<std::endl;
-    std::cout<<"guess=-3000000000: "<<objFn(-3000000000.0)<<std::endl;
-    
 }
-TEST_CASE("cal", "[OptionCalibration]"){
+TEST_CASE("BSCal", "[OptionCalibration]"){
     double stock=10.0;
     double discount=1.0;
     double sigma=.3;
@@ -1257,3 +1244,96 @@ TEST_CASE("cal", "[OptionCalibration]"){
     
 }
 
+
+
+TEST_CASE("HestonCal", "[OptionCalibration]"){
+    
+    double b=.0398;
+    double a=1.5768;
+    double c=.5751;
+    double rho=-.5711;
+    double v0=.0175;
+    auto r=0.0;
+    //convert to extended CGMY
+    auto sig=sqrt(b);
+    auto speed=a;
+    auto T=1.0;
+    auto S0=100.0;  
+    //auto kappa=speed;//long run tau of 1
+    auto v0Hat=v0/b;
+    auto adaV=c/sqrt(b);
+    auto CFCorr=[&](
+        const auto& u,
+        const auto& sig, 
+        const auto& speed, 
+        const auto& adaV,
+        const auto& rho, 
+        const auto& v0Hat
+    ){
+        return r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::cgmyLogRNCF(u, 0.0, 1.0, 1.0, .5, 0.0, sig),
+            speed, 
+            speed-adaV*rho*u*sig,
+            adaV,
+            T, 
+            v0Hat
+        );
+    };
+    std::vector<double> KArray(7);
+    
+    KArray[6]=.3;
+    KArray[5]=70;
+    KArray[4]=90;
+    KArray[3]=100;
+    KArray[2]=110;
+    KArray[1]=130;
+    KArray[0]=5000;
+    int numU=256; //this is high...this seems to be a computationally tricky problem
+    auto optionPrices=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, [&](const auto& u){
+        return exp(CFCorr(u, sig, speed, adaV, rho, v0Hat));
+    });
+
+
+    double discount=exp(-r*T);
+    double maxStrike=250;
+    std::reverse(std::begin(KArray), std::end(KArray));
+    std::reverse(std::begin(optionPrices), std::end(optionPrices));
+    auto estimateOfPhi=optioncal::generateFOEstimate(
+        KArray, 
+        optionPrices, 
+        S0, discount, maxStrike
+    );
+
+    auto getU=[](const auto& N){
+        double du= 2*M_PI/N;
+        return futilities::for_each_parallel(1, N, [&](const auto& index){
+            return index*du;
+        });
+    };
+    auto objFn=optioncal::getObjFn(
+        std::move(estimateOfPhi),
+        std::move(CFCorr),
+        getU(20)
+    );
+    auto guessSigma=.9; 
+    auto guessSpeed=1.2;
+    auto guessAdaV=1.0; 
+    auto guessRho=-.7;
+    auto guessV0=.5;
+
+
+
+    auto results=optioncal::calibrate(objFn, guessSigma, guessSpeed, guessAdaV, guessRho, guessV0);
+    std::cout<<"optimal sigma: "<<std::get<0>(results)<<std::endl;
+    std::cout<<"optimal speed: "<<std::get<1>(results)<<std::endl;
+    std::cout<<"optimal adaV: "<<std::get<2>(results)<<std::endl;
+    std::cout<<"optimal rho: "<<std::get<3>(results)<<std::endl;
+    std::cout<<"optimal V0: "<<std::get<4>(results)<<std::endl;
+
+    std::cout<<"actual sigma: "<<sig<<std::endl;
+    std::cout<<"actual speed: "<<speed<<std::endl;
+    std::cout<<"actual adaV: "<<adaV<<std::endl;
+    std::cout<<"actual rho: "<<rho<<std::endl;
+    std::cout<<"actual v0: "<<v0Hat<<std::endl;
+
+}

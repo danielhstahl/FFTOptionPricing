@@ -57,9 +57,9 @@ namespace optioncal{
             const auto nextX=std::get<XJ>(knots_gamma[index+1]);
             const auto currO=std::get<OJ>(tuple);
 
-            const auto currExp=exp(std::complex<U>(0.0, currX*u));
-            const auto prevExp=exp(std::complex<U>(0.0, prevX*u));
-            const auto nextExp=exp(std::complex<U>(0.0, nextX*u));
+            const auto currExp=exp(std::complex<double>(0.0, currX)*u);
+            const auto prevExp=exp(std::complex<double>(0.0, prevX)*u);
+            const auto nextExp=exp(std::complex<double>(0.0, nextX)*u);
 
             //equation 3.10
             const auto retVal=currO*((currExp-prevExp)/(currX-prevX)-(nextExp-currExp)/(nextX-currX))/(u*u);
@@ -85,10 +85,15 @@ namespace optioncal{
                 0.0
             )
         );
-        knots_gamma_tmp.emplace_back(std::make_tuple(xJ(stock, maxStrike, discount),0.0));
+        knots_gamma_tmp.emplace_back(
+            std::make_tuple(
+                xJ(stock, maxStrike, discount),
+                0.0
+            )
+        );
 
         return [knots_gamma = std::move(knots_gamma_tmp)](const auto& u){
-            const auto vi=std::complex<double>(0, u);
+            const auto vi=std::complex<double>(0.0, 1.0)*u;
             //equation 3.1
             return log(1.0+vi*(1.0+vi)*fSpline(u, knots_gamma));
         };
@@ -108,10 +113,10 @@ namespace optioncal{
     /**fn is the result from getObjFn*/
     template<typename FN, typename ...Params>
     auto calibrate(const FN& fn, const Params&... params){
-        const int maxIter=50;
-        const double prec=.00001;
+        const int maxIter=500;
+        const double prec=.00001; 
         const double peterb=.000001;
-        const double alpha=.0001; //needs a very small step or it goes off to no where
+        const double alpha=.01; //needs a very small step or it goes off to no where
         return newton::gradientDescentApprox(fn, maxIter, prec, peterb, alpha, params...);
     }
 
