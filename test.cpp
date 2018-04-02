@@ -1233,7 +1233,7 @@ TEST_CASE("cal", "[OptionCalibration]"){
     auto optionPrices=futilities::for_each_parallel_copy(strikes, [&](const auto& k, const auto& index){
         return BSCall(stock, discount, k, sigma, T);
     });
-    double maxStrike=100;
+    double maxStrike=20;
     auto estimateOfPhi=optioncal::generateFOEstimate(strikes, optionPrices, stock, discount, maxStrike);
     //int N=20;
     
@@ -1257,61 +1257,3 @@ TEST_CASE("cal", "[OptionCalibration]"){
     
 }
 
-
-/*
-TEST_CASE("cfHat", "[OptionCalibration]"){
-    double stock=10.0;
-    double discount=1.0;
-    double sigma=.3;
-    double T=1.0;
-    double r=-log(discount)/T;
-    std::vector<double> strikes={4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
-    auto optionPrices=futilities::for_each_parallel_copy(strikes, [&](const auto& k, const auto& index){
-        return BSCall(stock, discount, k, sigma, T);
-    });
-    double maxStrike=100;
-    auto ispline=optioncal::generateFOEstimate(strikes, optionPrices, stock, maxStrike);
-    int N=256;
-    
-    double dk, du;
-    std::tie(dk, du)=optioncal::getDKandDU(N, maxStrike);
-    auto estimateOfPhi=optioncal::cfHat(ispline, discount, maxStrike, dk, du, N);
-    for(int i=1; i<estimateOfPhi.size(); ++i){
-        std::cout<<"phiHat at "<<i<<": "<<log(estimateOfPhi[i])<<std::endl;
-        std::cout<<"phi at "<<i<<": "<<std::complex<double>(0.0, du*i)*(r-sigma*sigma*.5)*T-sigma*sigma*.5*T*du*i*du*i<<std::endl;
-    }
-}*/
-/*
-TEST_CASE("cfHat returns CF that can calibrate", "[OptionCalibration]"){
-
-    double stock=10.0;
-    double discount=1.0;
-    double sigma=.3;
-    double T=1.0;
-    double r=-log(discount)/T;
-    std::vector<double> strikes={4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
-    auto optionPrices=futilities::for_each_parallel_copy(strikes, [&](const auto& k, const auto& index){
-        return BSCall(stock, discount, k, sigma, T);
-    });
-    double maxStrike=100;
-    auto ispline=optioncal::generateFOEstimate(strikes, optionPrices, stock, maxStrike);
-
-    int N=256;
-    
-    std::cout<<"Bs at 500: "<<BSCall(stock, discount, maxStrike, sigma, T)<<std::endl;
-    double dk, du;
-    std::tie(dk, du)=optioncal::getDKandDU(N, maxStrike);
-    std::cout<<"dk: "<<dk<<std::endl;
-    std::cout<<"du: "<<du<<std::endl;
-    auto objFn=optioncal::getObjFn(
-        optioncal::cfHat(ispline, discount, maxStrike, dk, du, N),
-        [&](const auto& u, const auto& sigma){
-            return std::complex<double>(0.0, u)*(r-sigma*sigma*.5)*T-sigma*sigma*.5*T*u*u;
-        },
-        du
-    );
-    double sigmaGuess=.3;
-    std::cout<<"obj at .4: "<<objFn(sigmaGuess)<<std::endl;
-    //auto results=optioncal::calibrate(objFn, sigmaGuess);
-    //REQUIRE(std::get<0>(results)==Approx(sigma));
-}*/

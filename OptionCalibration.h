@@ -68,38 +68,7 @@ namespace optioncal{
         });
     }
 
-    /*auto bound(double maxStrike){
-        return log(maxStrike);
-    }*/
-    
-    /**STRIKES NEEDS TO BE IN ORDER!!  The strikes and options are passed as values since we need to modify them*/
-   /* auto generateFOEstimate(std::vector<double> strikes, std::vector<double> options, const double& stock, const double& maxStrike){
-        int numStrikes=strikes.size();
-        strikes=futilities::for_each_parallel(std::move(strikes), [&](const auto& strike, const auto& index){
-            return xJ(stock, strike, discount); 
-        });
-        options=futilities::for_each_parallel(std::move(options), [&](const auto& option, const auto& index){
-            return oJ(option, stock, strikes[index], discount);
-        });
-
-
-        options.insert(options.begin(), stock); //option price is stock price at k=0
-        options.push_back(0.0);//option price is zero for K->infty
-        
-        strikes=futilities::for_each_parallel(std::move(strikes), [](const auto& k, const auto& index){
-            return log(k);
-        });
-        double lStrike=bound(maxStrike);
-        strikes.insert(strikes.begin(), -lStrike);
-        strikes.push_back(lStrike);
-
-        //tk::spline sTmp;
-        //sTmp.set_points(strikes, options); 
-        return [s = std::move(sTmp)](const auto& callPrice){
-            return s(callPrice);
-        };
-    }*/
-
+ 
     template<typename Strike, typename MarketPrice, typename AssetValue, typename Discount>
     auto generateFOEstimate(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount, const Strike& maxStrike){
         int numStrikes=strikes.size();
@@ -125,39 +94,6 @@ namespace optioncal{
         };
     }
 
-
-
-
-    /*constexpr int DK=0;
-    constexpr int DU=1;
-    auto getDKandDU(int N, double maxStrike){
-        double lStrike=bound(maxStrike);
-        return std::make_tuple(2*lStrike/N, M_PI/lStrike);
-    }
-
-    template<typename IFS, typename Discount>
-    auto cfHat(
-        const IFS& instSpline, 
-        const Discount& discount, 
-        double maxStrike,
-        double dk, double du, int N
-    ){
-        double lStrike=bound(maxStrike);
-        return futilities::for_each_parallel(
-            ifft(futilities::for_each_parallel(0, N, [&](const auto& index){
-                auto pm=index%2==0?-1.0:1.0; //simpson's rule
-                auto currK=-lStrike+dk*index;
-                return std::complex<double>(instSpline(currK)*exp(-dk*index)*dk*(3.0+pm)/3.0, 0.0);
-            })),
-            [&](const auto& xn, const auto& index){
-                auto currU=du*index;
-                auto v=std::complex<double>(-1.0, currU);
-                return -v*v*xn*discount*exp(lStrike*(1.0-std::complex<double>(0.0, currU)));
-            }
-        );
-    }*/
-
-
     template<typename PhiHatFn, typename LogCfFN, typename DiscreteU>
     auto getObjFn(PhiHatFn&& phiHatFntmp, LogCfFN&& cfFntmp, DiscreteU&& uArraytmp){
         return [phiHatFn=std::move(phiHatFntmp), cfFn=std::move(cfFntmp), uArray=std::move(uArraytmp)](const auto&... params){
@@ -178,9 +114,6 @@ namespace optioncal{
         const double alpha=.0001; //needs a very small step or it goes off to no where
         return newton::gradientDescentApprox(fn, maxIter, prec, peterb, alpha, params...);
     }
-
-        
-
 
 }
 

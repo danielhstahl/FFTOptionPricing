@@ -22,6 +22,9 @@ before_install:
   - git clone https://github.com/phillyfan1138/RungeKutta
   - git clone https://github.com/phillyfan1138/FangOost
   - git clone https://github.com/phillyfan1138/CharacteristicFunctions
+  - git clone https://github.com/phillyfan1138/GaussNewton
+  - git clone https://github.com/phillyfan1138/TupleUtilities
+  - git clone https://github.com/phillyfan1138/AutoDiff
   - cd FFTOptionPricing
 script:
   - make
