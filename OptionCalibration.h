@@ -81,13 +81,13 @@ namespace optioncal{
         knots_gamma_tmp.insert(
             knots_gamma_tmp.begin(), 
             std::make_tuple(
-                xJ(stock, 1/maxStrike, discount),
+                xJ(stock, stock/maxStrike, discount),
                 0.0
             )
         );
         knots_gamma_tmp.emplace_back(
             std::make_tuple(
-                xJ(stock, maxStrike, discount),
+                xJ(stock, stock*maxStrike, discount),
                 0.0
             )
         );
@@ -105,7 +105,7 @@ namespace optioncal{
             return futilities::sum(uArray, [&](const auto& u, const auto& index){
                 //u-i comes from equation 3.1
                 return std::norm(
-                    phiHatFn(u)-cfFn(u-std::complex<double>(0, 1.0), params...)
+                    phiHatFn(u)-cfFn(u*std::complex<double>(0, 1.0)+1.0, params...)
                 );
             })/uArray.size();
         };
