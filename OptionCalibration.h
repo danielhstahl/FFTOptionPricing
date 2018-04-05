@@ -72,30 +72,27 @@ namespace optioncal{
     template<typename Strike, typename MarketPrice, typename AssetValue, typename Discount>
     auto generateFOEstimate(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount, const Strike& maxStrike){
         int numStrikes=strikes.size();
-
-        auto knots_gamma_tmp=futilities::for_each_parallel(0, numStrikes, [&](const auto& index){
-            const auto xj=xJ(stock, strikes[index], discount);
-            return std::make_tuple(xJ(stock, strikes[index], discount), oJ(options[index], stock, strikes[index], discount));
+        auto knots_gamma_tmp=std::vector<std::tuple<Strike, AssetValue> >(numStrikes+2);
+        int lengthFromEdge=1;
+        knots_gamma_tmp=futilities::for_each_parallel_subset(std::move(knots_gamma_tmp), lengthFromEdge, lengthFromEdge, [&](const auto& v, const auto& index){
+            const auto pIndex=index-lengthFromEdge;
+            const auto xj=xJ(stock, strikes[pIndex], discount);
+            return std::make_tuple(xJ(stock, strikes[pIndex], discount), oJ(options[pIndex], stock, strikes[pIndex], discount));
         });
 
-        knots_gamma_tmp.insert(
-            knots_gamma_tmp.begin(), 
-            std::make_tuple(
-                xJ(stock, stock/maxStrike, discount),
-                0.0
-            )
+        knots_gamma_tmp[0]=std::make_tuple(
+            xJ(stock, stock/maxStrike, discount),
+            0.0
         );
-        knots_gamma_tmp.emplace_back(
-            std::make_tuple(
-                xJ(stock, stock*maxStrike, discount),
-                0.0
-            )
+        knots_gamma_tmp[numStrikes+lengthFromEdge]=std::make_tuple(
+            xJ(stock, stock*maxStrike, discount),
+            0.0
         );
 
         return [knots_gamma = std::move(knots_gamma_tmp)](const auto& u){
             const auto vi=std::complex<double>(0.0, 1.0)*u;
             //equation 3.1
-            return log(1.0+vi*(1.0+vi)*fSpline(u, knots_gamma));
+            return u==0?vi:log(1.0+vi*(1.0+vi)*fSpline(u, knots_gamma));
         };
     }
 
