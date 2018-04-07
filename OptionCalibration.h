@@ -46,6 +46,7 @@ namespace optioncal{
 
     /**
     u is real (not complex)
+    knots_gamma MUST be in order (least to greatest in x)
     */
     template<typename U, typename Tuple>
     auto fSpline(const U& u, const std::vector<Tuple>& knots_gamma){
