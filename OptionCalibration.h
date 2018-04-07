@@ -103,17 +103,25 @@ namespace optioncal{
         };
     }
 
+    auto getUMax(int N, double xMax){
+        return M_PI*N/(2*xMax);
+    }
+    auto getDU(int N, double uMax){
+        return 2.0*uMax/N;
+    }
+
+
     template<typename Strike, typename MarketPrice, typename AssetValue, typename Discount>
     auto generateFOEstimateSpline(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount, const Strike& maxStrike){
         int numStrikes=strikes.size();
         int lengthFromEdge=1;
         std::vector<MarketPrice> O(numStrikes+2, 0.0);
         std::vector<Strike> X(numStrikes+2);
-        O=futilities::for_each_parallel_subset(std::move(O), lengthFromEdge, lengthFromEdge, [](const auto& v, const auto& index){
+        O=futilities::for_each_parallel_subset(std::move(O), lengthFromEdge, lengthFromEdge, [&](const auto& v, const auto& index){
             const auto pIndex=index-lengthFromEdge;
-            return oJ(options[pIndex], stock, strikes, discount);
+            return oJ(options[pIndex], stock, strikes[pIndex], discount);
         });
-        X=futilities::for_each_parallel_subset(std::move(X), lengthFromEdge, lengthFromEdge, [](const auto& v, const auto& index){
+        X=futilities::for_each_parallel_subset(std::move(X), lengthFromEdge, lengthFromEdge, [&](const auto& v, const auto& index){
             const auto pIndex=index-lengthFromEdge;
             return xJ(stock, strikes[pIndex], discount);
         });
@@ -123,19 +131,22 @@ namespace optioncal{
         tk::spline s;
         s.set_points(X,O); 
 
-        return [spline=std::move(s)](const auto& N, const auto& xMax, const auto& uMax){
+        return [spline=std::move(s)](const auto& N, const auto& xMax){
+            const auto uMax=getUMax(N, xMax);
             const auto dx=2.0*xMax/N;
-            const auto du=M_PI/xMax;
+            const auto du=getDU(N, uMax);
             //dx=2a/N, du=pi/a=2pi/(dx*N)
             return futilities::for_each_parallel(
-                ifft(futilities::for_each_parallel(0, N, [&](const auto& u, const auto& index){
+                ifft(futilities::for_each_parallel(0, N, [&](const auto& index){
                     auto pm=index%2==0?-1.0:1.0; //simpson's rule
-                    auto currX=dx*index-a;
-                    return exp(-(std::complex<double>(0.0, uMax)-1.0)*currX)*spline(currX)*dx*(3.0+pm)/3.0;
+                    auto currX=dx*index-xMax;
+                    auto xOffset=exp(-(std::complex<double>(0.0, uMax)+1.0)*currX);
+                    auto abOffset=exp(xMax*uMax*std::complex<double>(0, 1));
+                    return abOffset*xOffset*spline(currX)*dx*(3.0+pm)/3.0;
                 })),
                 [&](const auto& xn, const auto& index){
-                    auto u=uArray[index];
-                    const auto splineResult=exp(-std::complex<double>(0, 1)*u*a)*xn;
+                    auto u=du*index-uMax;
+                    const auto splineResult=exp(-std::complex<double>(0, 1)*u*xMax)*xn;
                     const auto uPlusi=std::complex<double>(0.0, 1.0)+u;
                     //equation 3.1...note that we are solving for the single argument "u" into the analytical CF
                     return u==0?0.0:log(1.0-uPlusi*u*splineResult);
@@ -144,15 +155,19 @@ namespace optioncal{
         };
     }
     template<typename PhiHatFn, typename LogCfFN, typename DiscreteU>
-    auto getObjFnEstimate(PhiHatFn&& phiHatFntmp, LogCfFN&& cfFntmp, int N, double xMax){
+    auto getObjFnSpline(PhiHatFn&& phiHatFntmp, LogCfFN&& cfFntmp, int N, double xMax){
         return [phiHatFn=std::move(phiHatFntmp), cfFn=std::move(cfFntmp), N, xMax](const auto&... params){
-            
+            double uMax=getUMax(N, xMax);
+            const auto du=getDU(N, uMax);
+            auto uArray=futilities::for_each_parallel(0, N, [&](const auto& index){
+                return index*du-uMax;
+            }); 
             //return 
             //taking average of u over domain and then returning the norm of the difference
             return std::norm(
                 (
-                    futilities::sum(uArray, [&](const auto& u, const auto& index){
-                        return phiHatFn(u); 
+                    futilities::sum(phiHatFn(N, xMax), [&](const auto& u, const auto& index){
+                        return u; 
                     })-
                     futilities::sum(uArray, [&](const auto& u, const auto& index){
                         return cfFn(u*std::complex<double>(0, 1.0), params...);

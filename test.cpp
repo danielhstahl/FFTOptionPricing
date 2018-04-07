@@ -1216,6 +1216,7 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
     });
     double maxStrike=20;
     auto estimateOfPhi=optioncal::generateFOEstimate(strikes, optionPrices, stock, discount, maxStrike);
+    auto estimateOfPhiSpline=optioncal::generateFOEstimateSpline(strikes, optionPrices, stock, discount, maxStrike);
     //int N=20;
     
     //auto myCf=
@@ -1254,6 +1255,16 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
     std::cout<<"cf @ .5: "<<tmpCF(std::complex<double>(0.0, .5))<<std::endl;
     std::cout<<"cf @ 2: "<<tmpCF(std::complex<double>(0.0, 2.0))<<std::endl;
     std::cout<<"cf @ 100: "<<tmpCF(std::complex<double>(0.0, 100.0))<<std::endl;
+    
+    std::cout<<"BS with FFT"<<std::endl;
+    int N=128;
+    double xMax=20.0;
+    auto phis=estimateOfPhiSpline(N, xMax);
+    double uMax=M_PI*N/(2*xMax);
+    double du=2.0*uMax/N;
+    for(int i=0; i<phis.size(); ++i){
+        std::cout<<"u: "<<i*du-uMax<<", estimate: "<<phis[i]<<", exact: "<<tmpCF(std::complex<double>(0.0, i*du-uMax))<<std::endl;
+    }
 
     auto objFn=optioncal::getObjFn(
         std::move(estimateOfPhi),
