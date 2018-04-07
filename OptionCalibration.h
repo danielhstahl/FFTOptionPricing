@@ -6,6 +6,7 @@
 #include "FunctionalUtilities.h"
 #include "fft.h"
 #include <tuple>
+#include "spline.h"
 #include "Newton.h"
 /**
  * Optimization specific
@@ -17,6 +18,8 @@
  * Option calibration of 
  * exponential Levy models
  * by Belomestny and ReiB
+ * and the updates from Sohl
+ * and Trabs
  * */
 namespace optioncal{
     /**
@@ -58,12 +61,15 @@ namespace optioncal{
             const auto currO=std::get<OJ>(tuple);
 
             const auto currExp=exp(std::complex<double>(0.0, currX)*u);
+            //const auto currExp=exp(currX*u);
             const auto prevExp=exp(std::complex<double>(0.0, prevX)*u);
+            //const auto prevExp=exp(prevX*u);
             const auto nextExp=exp(std::complex<double>(0.0, nextX)*u);
+            //const auto nextExp=exp(nextX*u);
 
-            //equation 3.10
+            //equation 3.10 
             const auto retVal=currO*((currExp-prevExp)/(currX-prevX)-(nextExp-currExp)/(nextX-currX))/(u*u);
-            //find the "j0" and "j0-1"
+            //find the "j0-1" and "j0"
             return currX<0&&nextX>=0?retVal+(1.0+(nextExp*currX-currExp*nextX)/(nextX-currX))/(u*u):retVal;
         });
     }
@@ -90,21 +96,110 @@ namespace optioncal{
         );
 
         return [knots_gamma = std::move(knots_gamma_tmp)](const auto& u){
-            const auto vi=std::complex<double>(0.0, 1.0)*u;
-            //equation 3.1
-            return u==0?vi:log(1.0+vi*(1.0+vi)*fSpline(u, knots_gamma));
+            const auto uPlusi=std::complex<double>(0.0, 1.0)+u;
+            //equation 3.1...note that we are solving for the single argument "u" into the analytical CF
+            return u==0?0.0:log(1.0-uPlusi*u*fSpline(uPlusi, knots_gamma));
         };
     }
+
+    template<typename Strike, typename MarketPrice, typename AssetValue, typename Discount>
+    auto generateFOEstimateSpline(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount, const Strike& maxStrike){
+        int numStrikes=strikes.size();
+        int lengthFromEdge=1;
+        std::vector<MarketPrice> O(numStrikes+2, 0.0);
+        std::vector<Strike> X(numStrikes+2);
+        O=futilities::for_each_parallel_subset(std::move(O), lengthFromEdge, lengthFromEdge, [](const auto& v, const auto& index){
+            const auto pIndex=index-lengthFromEdge;
+            return oJ(options[pIndex], stock, strikes, discount);
+        });
+        X=futilities::for_each_parallel_subset(std::move(X), lengthFromEdge, lengthFromEdge, [](const auto& v, const auto& index){
+            const auto pIndex=index-lengthFromEdge;
+            return xJ(stock, strikes[pIndex], discount);
+        });
+        X[0]=xJ(stock, stock/maxStrike, discount);
+        X[numStrikes+lengthFromEdge]=xJ(stock, maxStrike, discount);
+
+        tk::spline s;
+        s.set_points(X,O); 
+
+        return [spline=std::move(s)](const auto& N, const auto& xMax, const auto& uMax){
+            const auto dx=2.0*xMax/N;
+            const auto du=M_PI/xMax;
+            //dx=2a/N, du=pi/a=2pi/(dx*N)
+            return futilities::for_each_parallel(
+                ifft(futilities::for_each_parallel(0, N, [&](const auto& u, const auto& index){
+                    auto pm=index%2==0?-1.0:1.0; //simpson's rule
+                    auto currX=dx*index-a;
+                    return exp(-(std::complex<double>(0.0, uMax)-1.0)*currX)*spline(currX)*dx*(3.0+pm)/3.0;
+                })),
+                [&](const auto& xn, const auto& index){
+                    auto u=uArray[index];
+                    const auto splineResult=exp(-std::complex<double>(0, 1)*u*a)*xn;
+                    const auto uPlusi=std::complex<double>(0.0, 1.0)+u;
+                    //equation 3.1...note that we are solving for the single argument "u" into the analytical CF
+                    return u==0?0.0:log(1.0-uPlusi*u*splineResult);
+                }
+            );
+        };
+    }
+    template<typename PhiHatFn, typename LogCfFN, typename DiscreteU>
+    auto getObjFnEstimate(PhiHatFn&& phiHatFntmp, LogCfFN&& cfFntmp, int N, double xMax){
+        return [phiHatFn=std::move(phiHatFntmp), cfFn=std::move(cfFntmp), N, xMax](const auto&... params){
+            
+            //return 
+            //taking average of u over domain and then returning the norm of the difference
+            return std::norm(
+                (
+                    futilities::sum(uArray, [&](const auto& u, const auto& index){
+                        return phiHatFn(u); 
+                    })-
+                    futilities::sum(uArray, [&](const auto& u, const auto& index){
+                        return cfFn(u*std::complex<double>(0, 1.0), params...);
+                    })
+                )/(double)uArray.size()           
+            );
+        };
+    }
+
+/**
+
+template<typename IFS, typename Discount>
+    auto getCFFromMarketData(const IFS& instSpline, const std::vector<MarketPrice>& options, const Discount& discount, int N){
+        constexpr double upperBound=100;//arbitrary...this may be too high
+        const maxStrike=options.back()*upperBound;
+        const double dk=maxStrike/N;
+        const double du=2.0*M_PI/maxStrike; ///may want to compute this outside thsi function since this will be needed to discretize the CF
+        ///this should be min and max of call options.  The result iof the fft should be an approximate CF
+        return futilities::for_each_parallel(
+            ifft(futilities::for_each_parallel(0, N, [&](const auto& index){
+                auto pm=index%2==0?-1.0:1.0; //simpson's rule
+                auto currK=dk*index;
+                return instSpline(currK)*currK*currK*(3.0+pm)/3.0;
+            })),
+            [&](const auto& xn, const auto& index){
+                auto currU=du*index;
+                return currU*currU*xn;
+            }
+        );
+}*/
+
 
     template<typename PhiHatFn, typename LogCfFN, typename DiscreteU>
     auto getObjFn(PhiHatFn&& phiHatFntmp, LogCfFN&& cfFntmp, DiscreteU&& uArraytmp){
         return [phiHatFn=std::move(phiHatFntmp), cfFn=std::move(cfFntmp), uArray=std::move(uArraytmp)](const auto&... params){
-            return futilities::sum(uArray, [&](const auto& u, const auto& index){
-                //u-i comes from equation 3.1
-                return std::norm(
-                    phiHatFn(u)-cfFn(u*std::complex<double>(0, 1.0)+1.0, params...)
-                );
-            })/uArray.size();
+            
+            //return 
+            //taking average of u over domain and then returning the norm of the difference
+            return std::norm(
+                (
+                    futilities::sum(uArray, [&](const auto& u, const auto& index){
+                        return phiHatFn(u); 
+                    })-
+                    futilities::sum(uArray, [&](const auto& u, const auto& index){
+                        return cfFn(u*std::complex<double>(0, 1.0), params...);
+                    })
+                )/(double)uArray.size()           
+            );
         };
     }
     /**fn is the result from getObjFn*/
@@ -113,7 +208,8 @@ namespace optioncal{
         const int maxIter=500;
         const double prec=.00001; 
         const double peterb=.000001;
-        const double alpha=.01; //needs a very small step or it goes off to no where
+        static const std::size_t value = sizeof...(Params);
+        const double alpha=.01;//*value; //needs a very small step or it goes off to no where
         return newton::gradientDescentApprox(fn, maxIter, prec, peterb, alpha, params...);
     }
 
