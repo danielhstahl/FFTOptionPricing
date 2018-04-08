@@ -27,3 +27,11 @@ cloneAndCheckout GaussNewton
 cloneAndCheckout TupleUtilities
 cloneAndCheckout AutoDiff
 
+cd ..
+git clone https://github.com/kthohr/optim ./optim
+# build and install
+cd ./optim
+./configure -p -d
+make
+cd ..
+cd FFTOptionPricing

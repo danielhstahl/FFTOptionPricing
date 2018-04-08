@@ -8,7 +8,10 @@
 #include <tuple>
 #include "spline.h"
 #include "Newton.h"
-/**
+#include "optim.hpp"
+
+
+/** 
  * Optimization specific
  * to Levy processes and
  * the inverse problem for 
@@ -37,6 +40,10 @@ namespace optioncal{
     template<typename AssetValue, typename Strike, typename Discount>
     auto xJ(const AssetValue& stock, const Strike& strike, const Discount& discount){
         return log(strike*discount/stock);
+    }
+    template<typename AssetValue, typename Strike, typename Discount>
+    auto kX(const AssetValue& stock, const Strike& x, const Discount& discount){
+        return stock*exp(x)/discount;
     }
     template<typename T>
     auto maxZeroOrNumber(const T& num){
@@ -75,7 +82,13 @@ namespace optioncal{
         });
     }
 
- 
+    /*double BSCall(double S0, double discount, double k, double sigma, double T){
+        double s=sqrt(2.0);
+        double sigmasqrt=sqrt(T)*sigma;
+        auto d1=log(S0/(discount*k))/(sigmasqrt)+sigmasqrt*.5;
+        return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigmasqrt)/s)));
+    }*/
+
     template<typename Strike, typename MarketPrice, typename AssetValue, typename Discount>
     auto generateFOEstimate(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount, const Strike& maxStrike){
         int numStrikes=strikes.size();
@@ -103,61 +116,80 @@ namespace optioncal{
         };
     }
 
-    auto getUMax(int N, double xMax){
-        return M_PI*N/(2*xMax);
-    }
     auto getDU(int N, double uMax){
         return 2.0*uMax/N;
     }
-
-
+    auto getDX(int N, double xMin,double xMax){
+        return (xMax-xMin)/(N-1);
+    }
+    auto getUMax(int N, double xMin, double xMax){
+        return M_PI*(N-1)/(xMax-xMin);
+    }
+    
+    
+    constexpr auto cmp=std::complex<double>(0, 1);
     template<typename Strike, typename MarketPrice, typename AssetValue, typename Discount>
-    auto generateFOEstimateSpline(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount, const Strike& maxStrike){
+    auto generateFOEstimateSpline(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount, const Strike& minStrike, const Strike& maxStrike){
         int numStrikes=strikes.size();
-        int lengthFromEdge=1;
-        std::vector<MarketPrice> O(numStrikes+2, 0.0);
-        std::vector<Strike> X(numStrikes+2);
-        O=futilities::for_each_parallel_subset(std::move(O), lengthFromEdge, lengthFromEdge, [&](const auto& v, const auto& index){
-            const auto pIndex=index-lengthFromEdge;
-            return oJ(options[pIndex], stock, strikes[pIndex], discount);
+        const int numFromEnd=1;
+        std::vector<Strike> paddedStrikes(numStrikes+numFromEnd*2);
+        paddedStrikes=futilities::for_each_parallel_subset(std::move(paddedStrikes), numFromEnd, numFromEnd, [&](const auto& v, const auto& i){
+            return strikes[i-numFromEnd];
         });
-        X=futilities::for_each_parallel_subset(std::move(X), lengthFromEdge, lengthFromEdge, [&](const auto& v, const auto& index){
-            const auto pIndex=index-lengthFromEdge;
-            return xJ(stock, strikes[pIndex], discount);
-        });
-        X[0]=xJ(stock, stock/maxStrike, discount);
-        X[numStrikes+lengthFromEdge]=xJ(stock, maxStrike, discount);
+        paddedStrikes[0]=minStrike;
+        paddedStrikes[numStrikes+numFromEnd]=maxStrike;
 
+        std::vector<Strike> paddedOptions(numStrikes+numFromEnd*2);
+        paddedOptions=futilities::for_each_parallel_subset(std::move(paddedOptions), numFromEnd, numFromEnd, [&](const auto& v, const auto& i){
+            return options[i-numFromEnd];
+        });
+        paddedOptions[0]=stock-paddedStrikes[0];
+        paddedOptions[numStrikes+numFromEnd]=0;
+        
         tk::spline s;
-        s.set_points(X,O); 
-
-        return [spline=std::move(s)](const auto& N, const auto& xMax){
-            const auto uMax=getUMax(N, xMax);
-            const auto dx=2.0*xMax/N;
+        s.set_points(paddedStrikes, paddedOptions);    
+        return [
+            spline=std::move(s), 
+            minStrike=std::move(paddedStrikes.front()), 
+            maxStrike=std::move(paddedStrikes.back()),
+            discountM=std::move(discount),
+            stockM=std::move(stock)
+        ](const auto& N){
+            auto xMin=xJ(stockM, minStrike, discountM);
+            auto xMax=xJ(stockM, maxStrike, discountM);
+            const auto uMax=getUMax(N, xMin,xMax);
+            const auto dx=getDX(N, xMin, xMax);
             const auto du=getDU(N, uMax);
-            //dx=2a/N, du=pi/a=2pi/(dx*N)
+            auto adjustFirst=[](auto&& array){array[0]=array[0]/2.0;return std::move(array);};//for simpson
+
             return futilities::for_each_parallel(
-                ifft(futilities::for_each_parallel(0, N, [&](const auto& index){
+                ifft(adjustFirst(futilities::for_each(0, N, [&](const auto& index){
                     auto pm=index%2==0?-1.0:1.0; //simpson's rule
-                    auto currX=dx*index-xMax;
-                    auto xOffset=exp(-(std::complex<double>(0.0, uMax)+1.0)*currX);
-                    auto abOffset=exp(xMax*uMax*std::complex<double>(0, 1));
-                    return abOffset*xOffset*spline(currX)*dx*(3.0+pm)/3.0;
-                })),
+                    auto currX=dx*index+xMin;
+                    auto xOffset=exp(-(cmp*uMax+1.0)*currX);
+                    auto strike=kX(stockM, currX, discountM);
+                    auto optionPrice=spline(strike);
+                    //auto optionPrice=BSCall(stockM, discountM, strike, .3, 1.0);
+                    auto O=oJ(optionPrice, stockM, strike, discountM);
+                    return xOffset*O*(3.0+pm);
+                }))),
                 [&](const auto& xn, const auto& index){
                     auto u=du*index-uMax;
-                    const auto splineResult=exp(-std::complex<double>(0, 1)*u*xMax)*xn;
-                    const auto uPlusi=std::complex<double>(0.0, 1.0)+u;
+                    const auto splineResult=exp(cmp*u*xMin)*xn*dx/3.0;
+                    //const auto uPlusi=std::complex<double>(0.0, 1.0)+u;
                     //equation 3.1...note that we are solving for the single argument "u" into the analytical CF
-                    return u==0?0.0:log(1.0-uPlusi*u*splineResult);
+                   // return u==0?0.0:log(1.0+vi*(1.0+vi)*splineResult);
+                    return u==0?0.0:log(1.0-u*(u+cmp)*splineResult);
                 }
             );
         };
     }
-    template<typename PhiHatFn, typename LogCfFN, typename DiscreteU>
-    auto getObjFnSpline(PhiHatFn&& phiHatFntmp, LogCfFN&& cfFntmp, int N, double xMax){
-        return [phiHatFn=std::move(phiHatFntmp), cfFn=std::move(cfFntmp), N, xMax](const auto&... params){
-            double uMax=getUMax(N, xMax);
+    template<typename PhiHatFn, typename LogCfFN, typename DiscreteU, typename Strike, typename AssetValue, typename Discount>
+    auto getObjFnSpline(PhiHatFn&& phiHatFntmp, LogCfFN&& cfFntmp, int N, const Strike& minStrike, const Strike& maxStrike, const AssetValue& stock , const Discount& discount){
+        auto xMin=xJ(stock, minStrike, discount);
+        auto xMax=xJ(stock, maxStrike, discount);
+        return [phiHatFn=std::move(phiHatFntmp), cfFn=std::move(cfFntmp), N, xM=std::move(xMin), xP=std::move(xMax)](const auto&... params){
+            const auto uMax=getUMax(N, xM, xP);
             const auto du=getDU(N, uMax);
             auto uArray=futilities::for_each_parallel(0, N, [&](const auto& index){
                 return index*du-uMax;
@@ -166,16 +198,77 @@ namespace optioncal{
             //taking average of u over domain and then returning the norm of the difference
             return std::norm(
                 (
-                    futilities::sum(phiHatFn(N, xMax), [&](const auto& u, const auto& index){
+                    futilities::sum(phiHatFn(N), [&](const auto& u, const auto& index){
                         return u; 
                     })-
                     futilities::sum(uArray, [&](const auto& u, const auto& index){
-                        return cfFn(u*std::complex<double>(0, 1.0), params...);
+                        return cfFn(u*cmp, params...);
                     })
                 )/(double)uArray.size()           
             );
         };
     }
+
+
+    
+
+    template<typename Strike, typename MarketPrice, typename AssetPrice, typename Discount>
+    auto generateFOEstimateDHS(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const Discount& discount, const AssetPrice& stock, const Strike& minStrike, const Strike& maxStrike){
+        const int numStrikes=strikes.size();
+        std::vector<Strike> logStrikes(numStrikes+2);
+        logStrikes=futilities::for_each_parallel_subset(std::move(logStrikes), 1, 1, [&](const auto& v, const auto& i){
+            return log(strikes[i-1]/stock);
+        });
+        logStrikes[0]=log(minStrike/stock);
+        logStrikes[numStrikes+1]=log(maxStrike/stock);
+        std::vector<MarketPrice> optionPrices(numStrikes+2);
+        optionPrices=futilities::for_each_parallel_subset(std::move(optionPrices), 1, 1, [&](const auto& v, const auto& i){
+            return options[i-1]/stock;
+        });
+        optionPrices[0]=(stock-minStrike)/stock; //close to just being the stock price
+        optionPrices[numStrikes+1]=0.0; //just 0 at the end
+
+        tk::spline s;
+        s.set_points(logStrikes, optionPrices);
+
+        /*for(int i=0; i<128; ++i){
+            auto ls=logStrikes.front()+i*(logStrikes.back()-logStrikes.front())/(128-1);
+            std::cout<<"log strike: "<<ls<<", optionPrice: "<<s(ls)<<", actual: "<<BSCall(stock, discount, exp(ls), .3, 1.0)<<std::endl;
+        }*/
+        return [
+            spline=std::move(s), 
+            minStrike=std::move(logStrikes.front()), 
+            maxStrike=std::move(logStrikes.back()),
+            discountM=std::move(discount)
+        ](const auto& N){
+            const auto uMax=getUMax(N, minStrike,maxStrike);
+            const auto dx=getDX(N, minStrike, maxStrike);
+            const auto du=getDU(N, uMax);
+            auto adjustFirst=[](auto&& array){array[0]=array[0]/2.0;return std::move(array);};//for simpson
+            return futilities::for_each_parallel(
+                ifft(adjustFirst(futilities::for_each_parallel(0, N, [&](const auto& index){
+                    auto pm=index%2==0?-1.0:1.0; //simpson's rule
+                    auto currX=dx*index+minStrike;
+                    auto xOffset=exp(-(cmp*uMax+1.0)*currX);
+                    //auto xOffset=std::complex<double>(1.0, 0.0);
+                    auto optionPrice=spline(currX);
+                    //auto optionPrice=BSCall(10.0, discountM, exp(currX), .3, 1.0);
+                    return xOffset*optionPrice*(3.0+pm);
+                }))),
+                [&](const auto& xn, const auto& index){
+                    auto u=du*index-uMax;
+                    const auto splineResult=exp(cmp*u*minStrike)*xn*dx/3.0;
+                    //const auto uPlusi=std::complex<double>(0.0, 1.0)+u;
+                    //equation 3.1...note that we are solving for the single argument "u" into the analytical CF
+                   // return u==0?0.0:log(1.0+vi*(1.0+vi)*splineResult);
+                    //const auto vi=cmp*u-1.0;
+                    return u==0?0.0:log(u*(cmp-u)*splineResult/discountM);
+                }
+            );
+        };   
+
+    }
+
 
 /**
 
@@ -228,6 +321,92 @@ template<typename IFS, typename Discount>
         const double alpha=.01;//*value; //needs a very small step or it goes off to no where
         return newton::gradientDescentApprox(fn, maxIter, prec, peterb, alpha, params...);
     }
+
+
+//
+// Ackley function
+
+   /* double ackley_fn(const arma::vec& vals_inp, arma::vec* grad_out, void* opt_data)
+    {
+        const double x = vals_inp(0);
+        const double y = vals_inp(1);
+        const double pi = arma::datum::pi;
+    
+        double obj_val = -20*std::exp( -0.2*std::sqrt(0.5*(x*x + y*y)) ) - std::exp( 0.5*(std::cos(2*pi*x) + std::cos(2*pi*y)) ) + 22.718282L;
+
+        //
+
+        return obj_val;
+    }
+ 
+    int calibrate_de()
+    {
+        // initial values:
+        arma::vec x = arma::ones(2,1) + 1.0; // (2,2)
+
+        //
+
+        std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
+    
+        bool success = optim::de(x,ackley_fn,nullptr);
+
+        std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
+        std::chrono::duration<double> elapsed_seconds = end-start;
+    
+        if (success) {
+            std::cout << "de: Ackley test completed successfully.\n"
+                    << "elapsed time: " << elapsed_seconds.count() << "s\n";
+        } else {
+            std::cout << "de: Ackley test completed unsuccessfully." << std::endl;
+        }
+    
+        arma::cout << "\nde: solution to Ackley test:\n" << x << arma::endl;
+    
+        return 0;
+    }*/
+    /*
+    
+    template<typename FN, typename T>
+    auto calibrate_de(const FN& fn, const std::vector<T>& params){
+
+        arma::vec initParams=arma::vec(params);
+        optim::algo_settings settings;
+
+        settings.vals_bound = true;
+        //settings.lower_bounds = arma::zeros(params.size(),1);
+        std::vector<double> lowerBounds({0.0, 0.0, 0.0, 0.0, -10.0});
+        settings.lower_bounds = arma::vec(lowerBounds); 
+        std::vector<double> upperBounds({1.0, 2.0, 16.0, 16.0, 2.0});
+        settings.upper_bounds =arma::vec(upperBounds);
+        //auto fnForDe=std::function<double (arma::Col<double> const&, arma::Col<double>*, void*)>
+        
+
+        auto fnForDE=[&](const arma::vec& vals_inp, arma::vec* grad_out, void* opt_data){
+            return fn(vals_inp);
+        };
+
+
+        //arma::vec x = arma::ones(2,1) + 1.0; // (2,2)
+        
+    //
+
+        //std::chrono::time_point<std::chrono::system_clock> start = std::chrono::system_clock::now();
+    
+        bool success = optim::lbfgs(initParams, fnForDE, nullptr, settings);
+
+        //std::chrono::time_point<std::chrono::system_clock> end = std::chrono::system_clock::now();
+        //std::chrono::duration<double> elapsed_seconds = end-start;
+        if(success){
+        
+            arma::cout << "\nde: solution to Ackley test:\n" << initParams << arma::endl;
+            std::cout<<"val at optim: "<<fn(initParams)<<std::endl;
+        }
+        else{
+            std::cout<<"something went wrong"<<std::endl;
+        }
+        return 0;
+
+    }*/
 
 }
 

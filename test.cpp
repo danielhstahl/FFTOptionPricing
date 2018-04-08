@@ -1214,9 +1214,10 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
     auto optionPrices=futilities::for_each_parallel_copy(strikes, [&](const auto& k, const auto& index){
         return BSCall(stock, discount, k, sigma, T);
     });
+    double minStrike=.25;
     double maxStrike=20;
     auto estimateOfPhi=optioncal::generateFOEstimate(strikes, optionPrices, stock, discount, maxStrike);
-    auto estimateOfPhiSpline=optioncal::generateFOEstimateSpline(strikes, optionPrices, stock, discount, maxStrike);
+    auto estimateOfPhiSpline=optioncal::generateFOEstimateSpline(strikes, optionPrices, stock, discount, minStrike, maxStrike);
     //int N=20;
     
     //auto myCf=
@@ -1236,35 +1237,42 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
     };
     
     auto tmpCF=[&](const auto& u){
-            return u*(r-sigma*sigma*.5)*T+sigma*sigma*.5*T*u*u;
-        };
+        return u*(r-sigma*sigma*.5)*T+sigma*sigma*.5*T*u*u;
+    };
 
-    std::cout<<"BS"<<std::endl;
-    std::cout<<"phiHat @ -100: "<<estimateOfPhi(-100.0)<<std::endl;
-    std::cout<<"phiHat @ -2: "<<estimateOfPhi(-2.0)<<std::endl;
-    std::cout<<"phiHat @ -.5: "<<estimateOfPhi(-.5)<<std::endl;
-    std::cout<<"phiHat @ 0: "<<estimateOfPhi(0.0)<<std::endl;
-    std::cout<<"phiHat @ .5: "<<estimateOfPhi(0.5)<<std::endl;
-    std::cout<<"phiHat @ 2: "<<estimateOfPhi(2.0)<<std::endl;
-    std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<std::endl;
+    /*std::cout<<"BS"<<std::endl;
+    std::cout<<"phiHat @ -100: "<<estimateOfPhi(-100.0)<<", cf @ -100: "<<tmpCF(std::complex<double>(0.0, -100.0))<<std::endl;
+    std::cout<<"phiHat @ -2: "<<estimateOfPhi(-2.0)<<", cf @ -2: "<<tmpCF(std::complex<double>(0.0, -2.0))<<std::endl;
+    std::cout<<"phiHat @ -.5: "<<estimateOfPhi(-0.5)<<", cf @ -.5: "<<tmpCF(std::complex<double>(0.0, -.5))<<std::endl;
+    std::cout<<"phiHat @ 0: "<<estimateOfPhi(0.0)<<", cf @ 0: "<<tmpCF(std::complex<double>(0.0, 0.0))<<std::endl;
+    std::cout<<"phiHat @ .5: "<<estimateOfPhi(.5)<<", cf @ .5: "<<tmpCF(std::complex<double>(0.0, .5))<<std::endl;
+    std::cout<<"phiHat @ 2: "<<estimateOfPhi(2.0)<<", cf @ 2: "<<tmpCF(std::complex<double>(0.0, 2.0))<<std::endl;
+    std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<", cf @ 100: "<<tmpCF(std::complex<double>(0.0, 100.0))<<std::endl;*/
 
-    std::cout<<"cf @ -100: "<<tmpCF(std::complex<double>(0.0, -100.0))<<std::endl;
-    std::cout<<"cf @ -2: "<<tmpCF(std::complex<double>(0.0, -2.0))<<std::endl;
-    std::cout<<"cf @ -.5: "<<tmpCF(std::complex<double>(0.0, -0.5))<<std::endl;
-    std::cout<<"cf @ 0: "<<tmpCF(std::complex<double>(0.0, 0.0))<<std::endl;
-    std::cout<<"cf @ .5: "<<tmpCF(std::complex<double>(0.0, .5))<<std::endl;
-    std::cout<<"cf @ 2: "<<tmpCF(std::complex<double>(0.0, 2.0))<<std::endl;
-    std::cout<<"cf @ 100: "<<tmpCF(std::complex<double>(0.0, 100.0))<<std::endl;
     
     std::cout<<"BS with FFT"<<std::endl;
     int N=128;
-    double xMax=20.0;
-    auto phis=estimateOfPhiSpline(N, xMax);
-    double uMax=M_PI*N/(2*xMax);
+    double xMin=log(minStrike*discount/stock);
+    double xMax=log(maxStrike*discount/stock);
+    auto phis=estimateOfPhiSpline(N);
+    double uMax=M_PI*(N-1)/(xMax-xMin);
     double du=2.0*uMax/N;
-    for(int i=0; i<phis.size(); ++i){
+    for(int i=0; i<phis.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
         std::cout<<"u: "<<i*du-uMax<<", estimate: "<<phis[i]<<", exact: "<<tmpCF(std::complex<double>(0.0, i*du-uMax))<<std::endl;
     }
+
+   
+    /*std::cout<<"BS with FFT"<<std::endl;
+    const auto estimateOfPhiDHS=optioncal::generateFOEstimateDHS(strikes, optionPrices, discount, stock, minStrike, maxStrike);
+    int N=128;
+    double xMin=log(minStrike/stock);
+    double xMax=log(maxStrike/stock);
+    auto phis=estimateOfPhiDHS(N);
+    double uMax=M_PI*(N-1)/(xMax-xMin);
+    double du=2.0*uMax/N;
+    for(int i=0; i<phis.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
+        std::cout<<"u: "<<i*du-uMax<<", estimate: "<<phis[i]<<", exact: "<<tmpCF(std::complex<double>(0.0, i*du-uMax))<<std::endl;
+    }*/
 
     auto objFn=optioncal::getObjFn(
         std::move(estimateOfPhi),
@@ -1354,21 +1362,14 @@ TEST_CASE("HestonCal", "[OptionCalibration]"){
         });
     };
     std::cout<<"Heston "<<std::endl;
-    std::cout<<"phiHat @ -100: "<<estimateOfPhi(-100.0)<<std::endl;
-    std::cout<<"phiHat @ -2: "<<estimateOfPhi(-2.0)<<std::endl;
-    std::cout<<"phiHat @ -.5: "<<estimateOfPhi(-.5)<<std::endl;
-    std::cout<<"phiHat @ 0: "<<estimateOfPhi(0.0)<<std::endl;
-    std::cout<<"phiHat @ .5: "<<estimateOfPhi(0.5)<<std::endl;
-    std::cout<<"phiHat @ 2: "<<estimateOfPhi(2.0)<<std::endl;
-    std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<std::endl;
+    std::cout<<"phiHat @ -100: "<<estimateOfPhi(-100.0)<<", cf @ -100: "<<CFCorr(std::complex<double>(0.0, -100.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
+    std::cout<<"phiHat @ -2: "<<estimateOfPhi(-2.0)<<", cf @ -2: "<<CFCorr(std::complex<double>(0.0, -2.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
+    std::cout<<"phiHat @ -.5: "<<estimateOfPhi(-0.5)<<", cf @ -.5: "<<CFCorr(std::complex<double>(0.0, -.5), sig, speed, adaV, rho, v0Hat)<<std::endl;
+    std::cout<<"phiHat @ 0: "<<estimateOfPhi(0.0)<<", cf @ 0: "<<CFCorr(std::complex<double>(0.0, 0.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
+    std::cout<<"phiHat @ .5: "<<estimateOfPhi(.5)<<", cf @ .5: "<<CFCorr(std::complex<double>(0.0, .5), sig, speed, adaV, rho, v0Hat)<<std::endl;
+    std::cout<<"phiHat @ 2: "<<estimateOfPhi(2.0)<<", cf @ 2: "<<CFCorr(std::complex<double>(0.0, 2.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
+    std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<", cf @ 100: "<<CFCorr(std::complex<double>(0.0, 100.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
 
-    std::cout<<"cf @ -100: "<<CFCorr(std::complex<double>(0.0, -100.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"cf @ -2: "<<CFCorr(std::complex<double>(0.0, -2.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"cf @ -.5: "<<CFCorr(std::complex<double>(0.0, -0.5), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"cf @ 0: "<<CFCorr(std::complex<double>(0.0, 0.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"cf @ .5: "<<CFCorr(std::complex<double>(0.0, .5), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"cf @ 2: "<<CFCorr(std::complex<double>(0.0, 2.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"cf @ 100: "<<CFCorr(std::complex<double>(0.0, 100.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
 
 
     auto objFn=optioncal::getObjFn(
@@ -1459,40 +1460,57 @@ TEST_CASE("CGMYCal", "[OptionCalibration]"){
     };
 
     std::cout<<"CGMY"<<std::endl;
-    std::cout<<"phiHat @ -100: "<<estimateOfPhi(-100.0)<<std::endl;
-    std::cout<<"phiHat @ -2: "<<estimateOfPhi(-2.0)<<std::endl;
-    std::cout<<"phiHat @ -.5: "<<estimateOfPhi(-.5)<<std::endl;
-    std::cout<<"phiHat @ 0: "<<estimateOfPhi(0.0)<<std::endl;
-    std::cout<<"phiHat @ .5: "<<estimateOfPhi(0.5)<<std::endl;
-    std::cout<<"phiHat @ 2: "<<estimateOfPhi(2.0)<<std::endl;
-    std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<std::endl;
+    std::cout<<"phiHat @ -100: "<<estimateOfPhi(-100.0)<<", cf @ -100: "<<CFBase(std::complex<double>(0.0, -100.0), sig, C, G, M, Y)<<std::endl;
+    std::cout<<"phiHat @ -2: "<<estimateOfPhi(-2.0)<<", cf @ -2: "<<CFBase(std::complex<double>(0.0, -2.0), sig, C, G, M, Y)<<std::endl;
+    std::cout<<"phiHat @ -.5: "<<estimateOfPhi(-0.5)<<", cf @ -.5: "<<CFBase(std::complex<double>(0.0, -.5), sig, C, G, M, Y)<<std::endl;
+    std::cout<<"phiHat @ 0: "<<estimateOfPhi(0.0)<<", cf @ 0: "<<CFBase(std::complex<double>(0.0, 0.0), sig, C, G, M, Y)<<std::endl;
+    std::cout<<"phiHat @ .5: "<<estimateOfPhi(.5)<<", cf @ .5: "<<CFBase(std::complex<double>(0.0, .5), sig, C, G, M, Y)<<std::endl;
+    std::cout<<"phiHat @ 2: "<<estimateOfPhi(2.0)<<", cf @ 2: "<<CFBase(std::complex<double>(0.0, 2.0), sig, C, G, M, Y)<<std::endl;
+    std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<", cf @ 100: "<<CFBase(std::complex<double>(0.0, 100.0), sig, C, G, M, Y)<<std::endl;
 
-    std::cout<<"cf @ -100: "<<CFBase(std::complex<double>(0.0, -100.0), sig, C, G, M, Y)<<std::endl;
-    std::cout<<"cf @ -2: "<<CFBase(std::complex<double>(0.0, -2.0), sig, C, G, M, Y)<<std::endl;
-    std::cout<<"cf @ -.5: "<<CFBase(std::complex<double>(0.0, -0.5), sig, C, G, M, Y)<<std::endl;
-    std::cout<<"cf @ 0: "<<CFBase(std::complex<double>(0.0, 0.0),sig, C, G, M, Y)<<std::endl;
-    std::cout<<"cf @ .5: "<<CFBase(std::complex<double>(0.0, .5), sig, C, G, M, Y)<<std::endl;
-    std::cout<<"cf @ 2: "<<CFBase(std::complex<double>(0.0, 2.0), sig, C, G, M, Y)<<std::endl;
-    std::cout<<"cf @ 100: "<<CFBase(std::complex<double>(0.0, 100.0), sig, C, G, M, Y)<<std::endl;
 
     auto objFn=optioncal::getObjFn(
         std::move(estimateOfPhi),
         std::move(CFBase),
         getU(20)
     );
-    auto guessSigma=.4; 
+    auto guessSigma=.5; 
     auto guessC=.5;
-    auto guessG=5.5;
-    auto guessM=5.5;
-    auto guessY=1.05;
-
+    auto guessG=1.35;
+    auto guessM=1.2;
+    auto guessY=1.2;
 
     
+    const int maxIter=500;
+    const double prec=.00001; 
+    const double peterb=.000001;
+    const double alpha=.01;//*value; //needs a very small step or it goes off to no where
+    /*auto results=newton::gradientDescentApprox([&](const auto& sig, const auto& C, const auto& G, const auto& M, const auto& Y){
+        return futilities::sum(optionprice::FangOostCallPrice(S0, KArray, r, T, numU, [&](const auto& u){
+            return exp(CFBase(u, sig, C, G, M, Y));
+        }), [&](const auto& price, const auto& i){
+            return i>0&&i<(optionPrices.size()-1)?futilities::const_power((optionPrices[i]-price)/optionPrices[i], 2):0.0;
+        });
+    }, maxIter, prec, peterb, alpha, guessSigma, guessC, guessG, guessM, guessY);*/
+    
 
-/*
 
-    auto results=optioncal::calibrate(objFn, guessSigma, guessC, guessG, guessM, guessY);
-    std::cout<<"optimal sigma: "<<std::get<0>(results)<<std::endl;
+
+    /*int result=optioncal::calibrate_de([&](const auto& vec){
+        return futilities::sum(optionprice::FangOostCallPrice(S0, KArray, r, T, numU, [&](const auto& u){
+            return exp(CFBase(u, vec(0), vec(1), vec(2), vec(3), vec(4)));
+        }), [&](const auto& price, const auto& i){
+            return i>0&&i<(optionPrices.size()-1)?futilities::const_power(optionPrices[i]-price, 2)/optionPrices[i]:0.0;
+        });
+    }, std::vector<double>({.5, .5, 1.35, 1.2, 1.2}));*/
+    
+    //int result=optioncal::calibrate_de();
+
+
+
+
+    //auto results=optioncal::calibrate(objFn, guessSigma, guessC, guessG, guessM, guessY);
+    /*std::cout<<"optimal sigma: "<<std::get<0>(results)<<std::endl;
     std::cout<<"optimal C: "<<std::get<1>(results)<<std::endl;
     std::cout<<"optimal G: "<<std::get<2>(results)<<std::endl;
     std::cout<<"optimal M: "<<std::get<3>(results)<<std::endl;
@@ -1506,8 +1524,8 @@ TEST_CASE("CGMYCal", "[OptionCalibration]"){
     std::cout<<"obj at optimal: "<<objFn(std::get<0>(results), std::get<1>(results), std::get<2>(results), std::get<3>(results), std::get<4>(results))<<std::endl;
 
     std::cout<<"obj at actual: "<<objFn(sig, C, G, M, Y)<<std::endl;
-
 */
+
 }
 
 TEST_CASE("Jump diffusion cal", "[OptionCalibration]"){
@@ -1564,21 +1582,13 @@ TEST_CASE("Jump diffusion cal", "[OptionCalibration]"){
     
     std::cout<<"Jump Diffusion"<<std::endl;
 
-    std::cout<<"phiHat @ -100: "<<estimateOfPhi(-100.0)<<std::endl;
-    std::cout<<"phiHat @ -2: "<<estimateOfPhi(-2.0)<<std::endl;
-    std::cout<<"phiHat @ -.5: "<<estimateOfPhi(-.5)<<std::endl;
-    std::cout<<"phiHat @ 0: "<<estimateOfPhi(0.0)<<std::endl;
-    std::cout<<"phiHat @ .5: "<<estimateOfPhi(0.5)<<std::endl;
-    std::cout<<"phiHat @ 2: "<<estimateOfPhi(2.0)<<std::endl;
-    std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<std::endl;
-
-    std::cout<<"cf @ -100: "<<CFBase(std::complex<double>(0.0, -100.0), sig, lambda, muJ, sigJ)<<std::endl;
-    std::cout<<"cf @ -2: "<<CFBase(std::complex<double>(0.0, -2.0), sig, lambda, muJ, sigJ)<<std::endl;
-    std::cout<<"cf @ -.5: "<<CFBase(std::complex<double>(0.0, -0.5), sig, lambda, muJ, sigJ)<<std::endl;
-    std::cout<<"cf @ 0: "<<CFBase(std::complex<double>(0.0, 0.0), sig, lambda, muJ, sigJ)<<std::endl;
-    std::cout<<"cf @ .5: "<<CFBase(std::complex<double>(0.0, .5), sig, lambda, muJ, sigJ)<<std::endl;
-    std::cout<<"cf @ 2: "<<CFBase(std::complex<double>(0.0, 2.0), sig, lambda, muJ, sigJ)<<std::endl;
-    std::cout<<"cf @ 100: "<<CFBase(std::complex<double>(0.0, 100.0), sig, lambda, muJ, sigJ)<<std::endl;
+    std::cout<<"phiHat @ -100: "<<estimateOfPhi(-100.0)<<", cf @ -100: "<<CFBase(std::complex<double>(0.0, -100.0), sig, lambda, muJ, sigJ)<<std::endl;
+    std::cout<<"phiHat @ -2: "<<estimateOfPhi(-2.0)<<", cf @ -2: "<<CFBase(std::complex<double>(0.0, -2.0), sig, lambda, muJ, sigJ)<<std::endl;
+    std::cout<<"phiHat @ -.5: "<<estimateOfPhi(-0.5)<<", cf @ -.5: "<<CFBase(std::complex<double>(0.0, -.5), sig, lambda, muJ, sigJ)<<std::endl;
+    std::cout<<"phiHat @ 0: "<<estimateOfPhi(0.0)<<", cf @ 0: "<<CFBase(std::complex<double>(0.0, 0.0), sig, lambda, muJ, sigJ)<<std::endl;
+    std::cout<<"phiHat @ .5: "<<estimateOfPhi(.5)<<", cf @ .5: "<<CFBase(std::complex<double>(0.0, .5), sig, lambda, muJ, sigJ)<<std::endl;
+    std::cout<<"phiHat @ 2: "<<estimateOfPhi(2.0)<<", cf @ 2: "<<CFBase(std::complex<double>(0.0, 2.0), sig, lambda, muJ, sigJ)<<std::endl;
+    std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<", cf @ 100: "<<CFBase(std::complex<double>(0.0, 100.0), sig, lambda, muJ, sigJ)<<std::endl;
 
     auto objFn=optioncal::getObjFn(
         std::move(estimateOfPhi),
