@@ -8,7 +8,7 @@
 #include <tuple>
 #include "spline.h"
 #include "Newton.h"
-#include "optim.hpp"
+//#include "optim.hpp"
 
 
 /** 
@@ -230,7 +230,7 @@ namespace optioncal{
 
         tk::spline s;
         s.set_points(logStrikes, optionPrices);
-
+        
         /*for(int i=0; i<128; ++i){
             auto ls=logStrikes.front()+i*(logStrikes.back()-logStrikes.front())/(128-1);
             std::cout<<"log strike: "<<ls<<", optionPrice: "<<s(ls)<<", actual: "<<BSCall(stock, discount, exp(ls), .3, 1.0)<<std::endl;
@@ -241,30 +241,25 @@ namespace optioncal{
             maxStrike=std::move(logStrikes.back()),
             discountM=std::move(discount)
         ](const auto& N){
-            const auto uMax=getUMax(N, minStrike,maxStrike);
-            const auto dx=getDX(N, minStrike, maxStrike);
-            const auto du=getDU(N, uMax);
-            auto adjustFirst=[](auto&& array){array[0]=array[0]/2.0;return std::move(array);};//for simpson
-            return futilities::for_each_parallel(
-                ifft(adjustFirst(futilities::for_each_parallel(0, N, [&](const auto& index){
-                    auto pm=index%2==0?-1.0:1.0; //simpson's rule
-                    auto currX=dx*index+minStrike;
-                    auto xOffset=exp(-(cmp*uMax+1.0)*currX);
-                    //auto xOffset=std::complex<double>(1.0, 0.0);
-                    auto optionPrice=spline(currX);
-                    //auto optionPrice=BSCall(10.0, discountM, exp(currX), .3, 1.0);
-                    return xOffset*optionPrice*(3.0+pm);
-                }))),
-                [&](const auto& xn, const auto& index){
-                    auto u=du*index-uMax;
-                    const auto splineResult=exp(cmp*u*minStrike)*xn*dx/3.0;
-                    //const auto uPlusi=std::complex<double>(0.0, 1.0)+u;
-                    //equation 3.1...note that we are solving for the single argument "u" into the analytical CF
-                   // return u==0?0.0:log(1.0+vi*(1.0+vi)*splineResult);
-                    //const auto vi=cmp*u-1.0;
-                    return u==0?0.0:log(u*(cmp-u)*splineResult/discountM);
-                }
-            );
+            //const auto alpha=1.5;
+            const auto uMax=getUMax(N, minStrike, maxStrike);
+            auto valOrZero=[](const auto& v){
+                return v>0.0?v:0.0;
+            };
+            //const auto uMin=-uMax;
+            return integrateIFFT(-uMax, minStrike, maxStrike, [&](const auto& x){
+                const auto offset=1.0-exp(x)*discountM;
+                const auto optionPrice=spline(x);
+                return exp(-x)*(valOrZero(optionPrice)-valOrZero(offset));
+            }, N, [&](const auto& u, const auto& value){
+                //const auto front=(-alpha*(alpha+1.0)-u*(u+cmp));
+                //const auto front=(-u*(u+cmp));
+                //const auto front=(-u*(u-cmp));
+                //const auto v=u*cmp;
+                //const auto front=(v*(v+1.0));
+                const auto front=u*(u+cmp);
+                return (log(1.0-front*value));//*exp(log(discountM)*v)));
+            });
         };   
 
     }

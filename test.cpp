@@ -1206,7 +1206,7 @@ TEST_CASE("objFn", "[OptionCalibration]"){
 
 TEST_CASE("BSCal", "[OptionCalibration]"){
     double stock=10.0;
-    double discount=.99; //this really impacts the accuracy
+    double discount=1.0; //this really impacts the accuracy
     double sigma=.3;
     double T=1.0;
     double r=-log(discount)/T;
@@ -1214,8 +1214,8 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
     auto optionPrices=futilities::for_each_parallel_copy(strikes, [&](const auto& k, const auto& index){
         return BSCall(stock, discount, k, sigma, T);
     });
-    double minStrike=.25;
-    double maxStrike=20;
+    double minStrike=.025;
+    double maxStrike=200;
     auto estimateOfPhi=optioncal::generateFOEstimate(strikes, optionPrices, stock, discount, maxStrike);
     auto estimateOfPhiSpline=optioncal::generateFOEstimateSpline(strikes, optionPrices, stock, discount, minStrike, maxStrike);
     //int N=20;
@@ -1250,7 +1250,7 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
     std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<", cf @ 100: "<<tmpCF(std::complex<double>(0.0, 100.0))<<std::endl;*/
 
     
-    std::cout<<"BS with FFT"<<std::endl;
+    /*std::cout<<"BS with FFT"<<std::endl;
     int N=128;
     double xMin=log(minStrike*discount/stock);
     double xMax=log(maxStrike*discount/stock);
@@ -1258,21 +1258,22 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
     double uMax=M_PI*(N-1)/(xMax-xMin);
     double du=2.0*uMax/N;
     for(int i=0; i<phis.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
-        std::cout<<"u: "<<i*du-uMax<<", estimate: "<<phis[i]<<", exact: "<<tmpCF(std::complex<double>(0.0, i*du-uMax))<<std::endl;
+        std::cout<<"u: "<<i*du<<", estimate: "<<phis[i]<<", exact: "<<tmpCF(std::complex<double>(0.0, i*du))<<std::endl;
     }
-
+*/
    
-    /*std::cout<<"BS with FFT"<<std::endl;
+    std::cout<<"BS with FFT"<<std::endl;
     const auto estimateOfPhiDHS=optioncal::generateFOEstimateDHS(strikes, optionPrices, discount, stock, minStrike, maxStrike);
     int N=128;
     double xMin=log(minStrike/stock);
     double xMax=log(maxStrike/stock);
     auto phis=estimateOfPhiDHS(N);
+    //double uMin=-20.0;
     double uMax=M_PI*(N-1)/(xMax-xMin);
-    double du=2.0*uMax/N;
+    double du=(2.0*uMax)/N; 
     for(int i=0; i<phis.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
         std::cout<<"u: "<<i*du-uMax<<", estimate: "<<phis[i]<<", exact: "<<tmpCF(std::complex<double>(0.0, i*du-uMax))<<std::endl;
-    }*/
+    }
 
     auto objFn=optioncal::getObjFn(
         std::move(estimateOfPhi),
