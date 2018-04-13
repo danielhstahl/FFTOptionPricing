@@ -594,16 +594,26 @@ namespace optionprice{
         auto b=getMaxK(ada);
         auto lambda=getLambda(numSteps, b);
         auto adjustFirst=[](auto&& array){array[0]=array[0]/2.0;return std::move(array);};
-        auto cmplVector=fft(
+       /* auto cmplVector=fft(
             adjustFirst(
                 futilities::for_each_parallel(0, numSteps, [&](const auto& index){
                     auto pm=index%2==0?-1.0:1.0;
                     return discount*augCF(std::complex<double>(0, index*ada), alpha)*exp(std::complex<double>(0, b*index*ada))*(3.0+pm);
                 })
             )
+        );*/
+        auto cmplVector=integrateFFT(
+            -b, 0.0, (numSteps-1.0)*ada,
+            [&](const auto& u){
+                return discount*augCF(std::complex<double>(0, u), alpha);
+            },
+            numSteps
         );
-        return futilities::for_each_parallel(0, numSteps, [&](const auto& index){
+        /*return futilities::for_each_parallel(0, numSteps, [&](const auto& index){
             return mOutput(S0*cmplVector[index].real()*exp(-alpha*fangoost::getX(-b, lambda, index))*ada/(M_PI*3.0), index);
+        });*/
+        return futilities::for_each_parallel(0, numSteps, [&](const auto& index){
+            return mOutput(S0*cmplVector[index].real()*exp(-alpha*fangoost::getX(-b, lambda, index))/M_PI, index);
         });
     }
 
