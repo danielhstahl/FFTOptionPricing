@@ -117,13 +117,13 @@ namespace optioncal{
     }
 
     auto getDU(int N, double uMax){
-        return 2.0*uMax/N;
+        return /*2.0**/uMax/N;
     }
     auto getDX(int N, double xMin,double xMax){
         return (xMax-xMin)/(N-1);
     }
     auto getUMax(int N, double xMin, double xMax){
-        return M_PI*(N-1)/(xMax-xMin);
+        return 2.0*M_PI*(N-1)/(xMax-xMin);
     }
     
     
@@ -166,15 +166,16 @@ namespace optioncal{
                 ifft(adjustFirst(futilities::for_each(0, N, [&](const auto& index){
                     auto pm=index%2==0?-1.0:1.0; //simpson's rule
                     auto currX=dx*index+xMin;
-                    auto xOffset=exp(-(cmp*uMax+1.0)*currX);
+                    //auto xOffset=exp(-(cmp*uMax+1.0)*currX);
+                    auto xOffset=exp(-currX);
                     auto strike=kX(stockM, currX, discountM);
                     auto optionPrice=spline(strike);
                     //auto optionPrice=BSCall(stockM, discountM, strike, .3, 1.0);
                     auto O=oJ(optionPrice, stockM, strike, discountM);
-                    return xOffset*O*(3.0+pm);
+                    return std::complex<double>(1.0, 0.0)*xOffset*O*(3.0+pm);
                 }))),
                 [&](const auto& xn, const auto& index){
-                    auto u=du*index-uMax;
+                    auto u=du*index;
                     const auto splineResult=exp(cmp*u*xMin)*xn*dx/3.0;
                     //const auto uPlusi=std::complex<double>(0.0, 1.0)+u;
                     //equation 3.1...note that we are solving for the single argument "u" into the analytical CF
@@ -215,21 +216,21 @@ namespace optioncal{
     template<typename Strike, typename MarketPrice, typename AssetPrice, typename Discount>
     auto generateFOEstimateDHS(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const Discount& discount, const AssetPrice& stock, const Strike& minStrike, const Strike& maxStrike){
         const int numStrikes=strikes.size();
-        std::vector<Strike> logStrikes(numStrikes+2);
-        logStrikes=futilities::for_each_parallel_subset(std::move(logStrikes), 1, 1, [&](const auto& v, const auto& i){
-            return log(strikes[i-1]/stock);
+        std::vector<Strike> paddedStrikes(numStrikes+2);
+        paddedStrikes=futilities::for_each_parallel_subset(std::move(paddedStrikes), 1, 1, [&](const auto& v, const auto& i){
+            return strikes[i-1]/stock;
         });
-        logStrikes[0]=log(minStrike/stock);
-        logStrikes[numStrikes+1]=log(maxStrike/stock);
+        paddedStrikes[0]=minStrike/stock;
+        paddedStrikes[numStrikes+1]=maxStrike/stock;
         std::vector<MarketPrice> optionPrices(numStrikes+2);
         optionPrices=futilities::for_each_parallel_subset(std::move(optionPrices), 1, 1, [&](const auto& v, const auto& i){
             return options[i-1]/stock;
         });
-        optionPrices[0]=(stock-minStrike)/stock; //close to just being the stock price
+        optionPrices[0]=(stock-minStrike*discount)/stock; //close to just being the stock price
         optionPrices[numStrikes+1]=0.0; //just 0 at the end
 
         tk::spline s;
-        s.set_points(logStrikes, optionPrices);
+        s.set_points(paddedStrikes, optionPrices);
 
         /*for(int i=0; i<128; ++i){
             auto ls=logStrikes.front()+i*(logStrikes.back()-logStrikes.front())/(128-1);
@@ -237,32 +238,35 @@ namespace optioncal{
         }*/
         return [
             spline=std::move(s), 
-            minStrike=std::move(logStrikes.front()), 
-            maxStrike=std::move(logStrikes.back()),
+            minStrike=std::move(paddedStrikes.front()), 
+            maxStrike=std::move(paddedStrikes.back()),
             discountM=std::move(discount)
         ](const auto& N){
-            const auto uMax=getUMax(N, minStrike,maxStrike);
-            const auto dx=getDX(N, minStrike, maxStrike);
+            const auto minX=log(minStrike);
+            const auto maxX=log(maxStrike);
+            const auto uMax=getUMax(N, minX,maxX);
+            const auto dx=getDX(N, minX, maxX);
             const auto du=getDU(N, uMax);
             auto adjustFirst=[](auto&& array){array[0]=array[0]/2.0;return std::move(array);};//for simpson
             return futilities::for_each_parallel(
                 ifft(adjustFirst(futilities::for_each_parallel(0, N, [&](const auto& index){
                     auto pm=index%2==0?-1.0:1.0; //simpson's rule
                     auto currX=dx*index+minStrike;
-                    auto xOffset=exp(-(cmp*uMax+1.0)*currX);
+                    auto xOffset=exp(-currX);
+                    auto strike=1/xOffset;
                     //auto xOffset=std::complex<double>(1.0, 0.0);
-                    auto optionPrice=spline(currX);
+                    auto O=oJ(spline(strike), 1.0, strike, discountM);
                     //auto optionPrice=BSCall(10.0, discountM, exp(currX), .3, 1.0);
-                    return xOffset*optionPrice*(3.0+pm);
+                    return std::complex<double>(1.0, 0.0)*O*3.0+pm;//*xOffset*optionPrice*(3.0+pm);
                 }))),
                 [&](const auto& xn, const auto& index){
-                    auto u=du*index-uMax;
-                    const auto splineResult=exp(cmp*u*minStrike)*xn*dx/3.0;
+                    auto u=du*index;
+                    const auto splineResult=exp(cmp*u*minStrike)*xn/3.0;//*dx/3.0;
                     //const auto uPlusi=std::complex<double>(0.0, 1.0)+u;
                     //equation 3.1...note that we are solving for the single argument "u" into the analytical CF
                    // return u==0?0.0:log(1.0+vi*(1.0+vi)*splineResult);
                     //const auto vi=cmp*u-1.0;
-                    return u==0?0.0:log(u*(cmp-u)*splineResult/discountM);
+                    return u==0?0.0:log(1.0+cmp*u*(1.0+cmp*u)*splineResult);
                 }
             );
         };   

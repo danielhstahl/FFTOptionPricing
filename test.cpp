@@ -1249,30 +1249,30 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
     std::cout<<"phiHat @ 2: "<<estimateOfPhi(2.0)<<", cf @ 2: "<<tmpCF(std::complex<double>(0.0, 2.0))<<std::endl;
     std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<", cf @ 100: "<<tmpCF(std::complex<double>(0.0, 100.0))<<std::endl;*/
 
-    
+    /*
     std::cout<<"BS with FFT"<<std::endl;
     int N=128;
     double xMin=log(minStrike*discount/stock);
     double xMax=log(maxStrike*discount/stock);
     auto phis=estimateOfPhiSpline(N);
-    double uMax=M_PI*(N-1)/(xMax-xMin);
-    double du=2.0*uMax/N;
+    double uMax=2.0*M_PI*(N-1)/(xMax-xMin);
+    double du=uMax/N;
     for(int i=0; i<phis.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
-        std::cout<<"u: "<<i*du-uMax<<", estimate: "<<phis[i]<<", exact: "<<tmpCF(std::complex<double>(0.0, i*du-uMax))<<std::endl;
+        std::cout<<"u: "<<i*du<<", estimate: "<<phis[i]<<", exact: "<<tmpCF(std::complex<double>(0.0, i*du))<<std::endl;
     }
-
+*/
    
-    /*std::cout<<"BS with FFT"<<std::endl;
+    std::cout<<"BS with FFT: DHS"<<std::endl;
     const auto estimateOfPhiDHS=optioncal::generateFOEstimateDHS(strikes, optionPrices, discount, stock, minStrike, maxStrike);
     int N=128;
-    double xMin=log(minStrike/stock);
-    double xMax=log(maxStrike/stock);
-    auto phis=estimateOfPhiDHS(N);
-    double uMax=M_PI*(N-1)/(xMax-xMin);
-    double du=2.0*uMax/N;
-    for(int i=0; i<phis.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
-        std::cout<<"u: "<<i*du-uMax<<", estimate: "<<phis[i]<<", exact: "<<tmpCF(std::complex<double>(0.0, i*du-uMax))<<std::endl;
-    }*/
+    double xMinDHS=log(minStrike/stock);
+    double xMaxDHS=log(maxStrike/stock);
+    auto phisDHS=estimateOfPhiDHS(N);
+    double uMaxDHS=2.0*M_PI*(N-1)/(xMaxDHS-xMinDHS);
+    double duDHS=uMaxDHS/N;
+    for(int i=0; i<phisDHS.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
+        std::cout<<"u: "<<i*duDHS<<", estimate: "<<phisDHS[i]<<", exact: "<<tmpCF(std::complex<double>(1.0, -i*duDHS))<<std::endl;
+    }
 
     auto objFn=optioncal::getObjFn(
         std::move(estimateOfPhi),
