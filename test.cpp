@@ -1214,10 +1214,9 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
     auto optionPrices=futilities::for_each_parallel_copy(strikes, [&](const auto& k, const auto& index){
         return BSCall(stock, discount, k, sigma, T);
     });
-    double minStrike=.025;
-    double maxStrike=200;
+    double minStrike=.00025;
+    double maxStrike=25;
     auto estimateOfPhi=optioncal::generateFOEstimate(strikes, optionPrices, stock, discount, maxStrike);
-    auto estimateOfPhiSpline=optioncal::generateFOEstimateSpline(strikes, optionPrices, stock, discount, minStrike, maxStrike);
     //int N=20;
     
     //auto myCf=
@@ -1240,38 +1239,17 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
         return u*(r-sigma*sigma*.5)*T+sigma*sigma*.5*T*u*u;
     };
 
-    /*std::cout<<"BS"<<std::endl;
-    std::cout<<"phiHat @ -100: "<<estimateOfPhi(-100.0)<<", cf @ -100: "<<tmpCF(std::complex<double>(0.0, -100.0))<<std::endl;
-    std::cout<<"phiHat @ -2: "<<estimateOfPhi(-2.0)<<", cf @ -2: "<<tmpCF(std::complex<double>(0.0, -2.0))<<std::endl;
-    std::cout<<"phiHat @ -.5: "<<estimateOfPhi(-0.5)<<", cf @ -.5: "<<tmpCF(std::complex<double>(0.0, -.5))<<std::endl;
-    std::cout<<"phiHat @ 0: "<<estimateOfPhi(0.0)<<", cf @ 0: "<<tmpCF(std::complex<double>(0.0, 0.0))<<std::endl;
-    std::cout<<"phiHat @ .5: "<<estimateOfPhi(.5)<<", cf @ .5: "<<tmpCF(std::complex<double>(0.0, .5))<<std::endl;
-    std::cout<<"phiHat @ 2: "<<estimateOfPhi(2.0)<<", cf @ 2: "<<tmpCF(std::complex<double>(0.0, 2.0))<<std::endl;
-    std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<", cf @ 100: "<<tmpCF(std::complex<double>(0.0, 100.0))<<std::endl;*/
-
-    /*
-    std::cout<<"BS with FFT"<<std::endl;
-    int N=128;
-    double xMin=log(minStrike*discount/stock);
-    double xMax=log(maxStrike*discount/stock);
-    auto phis=estimateOfPhiSpline(N);
-    double uMax=2.0*M_PI*(N-1)/(xMax-xMin);
-    double du=uMax/N;
-    for(int i=0; i<phis.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
-        std::cout<<"u: "<<i*du<<", estimate: "<<phis[i]<<", exact: "<<tmpCF(std::complex<double>(0.0, i*du))<<std::endl;
-    }
-*/
-   
+       
     std::cout<<"BS with FFT: DHS"<<std::endl;
-    const auto estimateOfPhiDHS=optioncal::generateFOEstimateDHS(strikes, optionPrices, discount, stock, minStrike, maxStrike);
+    const auto estimateOfPhiDHS=optioncal::generateFOEstimate(strikes, optionPrices, discount, stock, minStrike, maxStrike);
     int N=128;
-    double xMinDHS=log(minStrike/stock);
-    double xMaxDHS=log(maxStrike/stock);
-    auto phisDHS=estimateOfPhiDHS(N);
-    double uMaxDHS=2.0*M_PI*(N-1)/(xMaxDHS-xMinDHS);
-    double duDHS=uMaxDHS/N;
-    for(int i=0; i<phisDHS.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
-        std::cout<<"u: "<<i*duDHS<<", estimate: "<<phisDHS[i]<<", exact: "<<tmpCF(std::complex<double>(1.0, -i*duDHS))<<std::endl;
+    double xMin=log(minStrike/stock);
+    double xMax=log(strikes.back()/stock);
+    auto phis=estimateOfPhiDHS(N);
+    double uMax=M_PI*(N-1)/(xMax-xMin);
+    double du=2.0*uMax/N;
+    for(int i=0; i<phis.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
+        std::cout<<"u: "<<i*du-uMax<<", estimate: "<<phis[i]<<", exact spline: "<<estimateOfPhi(i*du-uMax)<<", exact: "<<tmpCF(std::complex<double>(0.0, i*du-uMax))<<std::endl;
     }
 
     auto objFn=optioncal::getObjFn(
@@ -1297,7 +1275,7 @@ TEST_CASE("HestonCal", "[OptionCalibration]"){
     double c=.5751;
     double rho=-.5711;
     double v0=.0175;
-    auto r=0.01;
+    auto r=0.00; //TODO!! make this work with non zero r (have to update x's)
     //convert to extended CGMY
     auto sig=sqrt(b);
     auto speed=a;
@@ -1361,14 +1339,19 @@ TEST_CASE("HestonCal", "[OptionCalibration]"){
             return index*du;
         });
     };
-    std::cout<<"Heston "<<std::endl;
-    std::cout<<"phiHat @ -100: "<<estimateOfPhi(-100.0)<<", cf @ -100: "<<CFCorr(std::complex<double>(0.0, -100.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"phiHat @ -2: "<<estimateOfPhi(-2.0)<<", cf @ -2: "<<CFCorr(std::complex<double>(0.0, -2.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"phiHat @ -.5: "<<estimateOfPhi(-0.5)<<", cf @ -.5: "<<CFCorr(std::complex<double>(0.0, -.5), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"phiHat @ 0: "<<estimateOfPhi(0.0)<<", cf @ 0: "<<CFCorr(std::complex<double>(0.0, 0.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"phiHat @ .5: "<<estimateOfPhi(.5)<<", cf @ .5: "<<CFCorr(std::complex<double>(0.0, .5), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"phiHat @ 2: "<<estimateOfPhi(2.0)<<", cf @ 2: "<<CFCorr(std::complex<double>(0.0, 2.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
-    std::cout<<"phiHat @ 100: "<<estimateOfPhi(100.0)<<", cf @ 100: "<<CFCorr(std::complex<double>(0.0, 100.0), sig, speed, adaV, rho, v0Hat)<<std::endl;
+    double minStrike=.0004;
+    std::cout<<"Heston with FFT: DHS"<<std::endl;
+    const auto estimateOfPhiDHS=optioncal::generateFOEstimate(observedK, observedO, discount, S0, minStrike, maxStrike);
+    int N=128;
+
+    double xMin=log(minStrike/S0);
+    double xMax=log(observedK.back()/S0);
+    auto phis=estimateOfPhiDHS(N);
+    double uMax=M_PI*(N-1)/(xMax-xMin);
+    double du=2.0*uMax/N;
+    for(int i=0; i<phis.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
+        std::cout<<"u: "<<i*du-uMax<<", estimate: "<<phis[i]<<", exact spline: "<<estimateOfPhi(i*du-uMax)<<", exact: "<<CFCorr(std::complex<double>(0.0, i*du-uMax), sig, speed, adaV, rho, v0Hat)<<std::endl;
+    }
 
 
 

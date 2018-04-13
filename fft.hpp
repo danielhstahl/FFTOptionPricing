@@ -81,7 +81,7 @@ auto genericIntegration(double outputMin, double inputMin, double inputMax, FN&&
 		})),
 		[&](const auto& v, const auto& index){
 			const double u=outputMin+index*du;
-			return fnOutput(u, v*exp(u*xMin*cmpi));
+			return fnOutput(u, v*exp(u*inputMin*cmpi));
 		}
 	);
 }
