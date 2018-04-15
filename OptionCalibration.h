@@ -167,10 +167,10 @@ namespace optioncal{
         
     }
 
-    template<typename Strike, typename MarketPrice, typename AssetPrice, typename Discount>
-    auto generateFOEstimate(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const Discount& discount, const AssetPrice& stock, const Strike& minStrike, const Strike& maxStrike){
+    template<typename StrikeArray, typename Strike, typename MarketPrice, typename AssetPrice, typename Discount>
+    auto generateFOEstimate(const StrikeArray& strikes, const std::vector<MarketPrice>& options, const Discount& discount, const AssetPrice& stock, const Strike& minStrike, const Strike& maxStrike){
         const int numStrikes=strikes.size();
-        std::vector<Strike> paddedStrikes(numStrikes+2);
+        StrikeArray paddedStrikes(numStrikes+2);
         paddedStrikes=futilities::for_each_parallel_subset(std::move(paddedStrikes), 1, 1, [&](const auto& v, const auto& i){
             return strikes[i-1]/stock;
         });
