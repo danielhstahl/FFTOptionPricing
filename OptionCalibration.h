@@ -25,12 +25,7 @@
  * and Trabs
  * */
 namespace optioncal{
-    double BSCall(double S0, double discount, double k, double sigma, double T){
-        double s=sqrt(2.0);
-        double sigmasqrt=sqrt(T)*sigma;
-        auto d1=log(S0/(discount*k))/(sigmasqrt)+sigmasqrt*.5;
-        return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigmasqrt)/s)));
-    }
+
     /**
      * equation 2.8
      * */
@@ -190,7 +185,10 @@ namespace optioncal{
 
         tk::spline s;
         s.set_points(paddedStrikes, optionPrices);
-        
+        /*for(int i=0; i<128; ++i){
+            double strike=-5.0+i*(8.0)/127.0;
+            std::cout<<"strike: "<<exp(strike)<<", option: "<<s(exp(strike))<<std::endl;
+        }*/
         return [
             spline=std::move(s), 
             minStrike=std::move(paddedStrikes.front()), 
@@ -251,6 +249,16 @@ template<typename IFS, typename Discount>
             });
         };
     }
+    template<typename PhiHat, typename LogCfFN, typename DiscreteU>
+    auto getObjFn_arr(PhiHat&& phiHattmp, LogCfFN&& cfFntmp, DiscreteU&& uArraytmp){
+        return [phiHat=std::move(phiHattmp), cfFn=std::move(cfFntmp), uArray=std::move(uArraytmp)](const auto& arrayParam){
+            return futilities::sum(uArray, [&](const auto& u, const auto& index){
+                return std::norm(
+                    phiHat[index]-cfFn(std::complex<double>(1.0, u), arrayParam)
+                )/(double)uArray.size();         
+            });
+        };
+    }
     /**fn is the result from getObjFn*/
     template<typename FN, typename ...Params>
     auto calibrate(const FN& fn, const Params&... params){
@@ -261,6 +269,7 @@ template<typename IFS, typename Discount>
         const double alpha=.01; //needs a very small step or it goes off to no where
         return newton::gradientDescentApprox(fn, maxIter, prec, peterb, alpha, params...);
     }
+
 
 
 }
