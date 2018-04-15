@@ -57,7 +57,7 @@ namespace optioncal{
     }
     constexpr int XJ=0;
     constexpr int OJ=1;
-
+    constexpr auto cmp=std::complex<double>(0, 1);
 
 
     /**
@@ -96,7 +96,7 @@ namespace optioncal{
     }*/
 
     template<typename Strike, typename MarketPrice, typename AssetValue, typename Discount>
-    auto generateFOEstimate(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount, const Strike& maxStrike){
+    auto generateFOEstimateSp(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount, const Strike& maxStrike){
         int numStrikes=strikes.size();
         auto knots_gamma_tmp=std::vector<std::tuple<Strike, AssetValue> >(numStrikes+2);
         int lengthFromEdge=1;
@@ -157,6 +157,21 @@ namespace optioncal{
         };
     }
 
+    template<typename ArrayU, typename Fn, typename ApplyEachSum, typename T>
+    auto DFT(const std::vector<ArrayU>& uArray, Fn&& fn, ApplyEachSum&& fnU, const T& xMin, const T& xMax, int N){
+        T dx=(xMax-xMin)/(N-1);
+        int uSize=uArray.size();
+        return futilities::for_each_parallel(0, uSize, [&](const auto& uIndex){
+            auto u=uArray[uIndex];
+            return fnU(u, futilities::sum(0, N, [&](const auto& index){
+                auto simpson=(index==0||index==(N-1))?1.0:(index%2==0?2.0:4.0);
+                auto x=xMin+dx*index;
+                return exp(cmp*u*x)*fn(u, x, index)*simpson*dx/3.0;
+            }));
+        });
+        
+    }
+
     template<typename Strike, typename MarketPrice, typename AssetPrice, typename Discount>
     auto generateFOEstimate(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const Discount& discount, const AssetPrice& stock, const Strike& minStrike, const Strike& maxStrike){
         const int numStrikes=strikes.size();
@@ -175,38 +190,29 @@ namespace optioncal{
 
         tk::spline s;
         s.set_points(paddedStrikes, optionPrices);
-        std::cout<<"inital strike: "<<paddedStrikes.front()<<std::endl;
-        std::cout<<"end log strike: "<<paddedStrikes.back()<<std::endl;
-        for(int i=0; i<64;++i){
-            const auto dx=(paddedStrikes.back()-paddedStrikes.front())/64;
-            const auto logStrike=paddedStrikes.front()+dx*i; 
-            const auto optionPrice=s(logStrike);
-            std::cout<<"spline option: "<<optionPrice<<", strike: "<<logStrike<<std::endl;
-        }
-
+        
         return [
             spline=std::move(s), 
             minStrike=std::move(paddedStrikes.front()), 
-            maxStrike=std::move(paddedStrikes[numStrikes]),
-            discountM=std::move(discount)
-        ](const auto& N){
-            const auto logMin=log(minStrike);
-            const auto logMax=log(maxStrike);
-            const auto uMax=getUMax(N, logMin, logMax);
+            maxStrike=std::move(paddedStrikes.back()),
+            discount=std::move(discount)
+        ](int N, const auto& uArray){
+            const auto xMin=log(discount*minStrike);
+            const auto xMax=log(discount*maxStrike);
             auto valOrZero=[](const auto& v){
                 return v>0.0?v:0.0;
             };
-            return integrateIFFT(-uMax, logMin, logMax, [&](const auto& x){
-                const auto strike=exp(x);
-                const auto offset=1.0-strike*discountM;
+            return DFT(uArray, [&](const auto& u, const auto& x, const auto& index){
+                const auto expX=exp(x);
+                const auto strike=expX/discount;
+                const auto offset=1.0-expX;
                 const auto optionPrice=spline(strike);
-                //const auto optionPrice_r=BSCall(1.0, discountM, exp(x), .3, 1.0);
-                //std::cout<<"spline option: "<<optionPrice<<", actual option: "<<optionPrice_r<<std::endl;
-                return (valOrZero(optionPrice)-valOrZero(offset))/strike;
-            }, N, [&](const auto& u, const auto& value){
-                const auto front=u*(u+cmp);
-                return (log(1.0-front*value));//*exp(log(discountM)*v)));
-            });
+                //const auto optionPrice=BSCall(1.0, discount, strike, .3, 1.0);
+                return valOrZero(optionPrice)-valOrZero(offset);
+            }, [&](const auto& u, const auto& value){
+                const auto front=u*cmp*(1.0+u*cmp);
+                return log(1.0+front*value);
+            }, xMin, xMax, N);
         };   
 
     }
@@ -235,22 +241,14 @@ template<typename IFS, typename Discount>
 }*/
 
 
-    template<typename PhiHatFn, typename LogCfFN, typename DiscreteU>
-    auto getObjFn(PhiHatFn&& phiHatFntmp, LogCfFN&& cfFntmp, DiscreteU&& uArraytmp){
-        return [phiHatFn=std::move(phiHatFntmp), cfFn=std::move(cfFntmp), uArray=std::move(uArraytmp)](const auto&... params){
-            
-            //return 
-            //taking average of u over domain and then returning the norm of the difference
-            return std::norm(
-                (
-                    futilities::sum(uArray, [&](const auto& u, const auto& index){
-                        return phiHatFn(u); 
-                    })-
-                    futilities::sum(uArray, [&](const auto& u, const auto& index){
-                        return cfFn(u*std::complex<double>(0, 1.0), params...);
-                    })
-                )/(double)uArray.size()           
-            );
+    template<typename PhiHat, typename LogCfFN, typename DiscreteU>
+    auto getObjFn(PhiHat&& phiHattmp, LogCfFN&& cfFntmp, DiscreteU&& uArraytmp){
+        return [phiHat=std::move(phiHattmp), cfFn=std::move(cfFntmp), uArray=std::move(uArraytmp)](const auto&... params){
+            return futilities::sum(uArray, [&](const auto& u, const auto& index){
+                return std::norm(
+                    phiHat[index]-cfFn(std::complex<double>(1.0, u), params...)
+                )/(double)uArray.size();         
+            });
         };
     }
     /**fn is the result from getObjFn*/
@@ -260,7 +258,7 @@ template<typename IFS, typename Discount>
         const double prec=.00001; 
         const double peterb=.000001;
         static const std::size_t value = sizeof...(Params);
-        const double alpha=.01;//*value; //needs a very small step or it goes off to no where
+        const double alpha=.01; //needs a very small step or it goes off to no where
         return newton::gradientDescentApprox(fn, maxIter, prec, peterb, alpha, params...);
     }
 
