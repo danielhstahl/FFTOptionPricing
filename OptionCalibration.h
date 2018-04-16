@@ -167,9 +167,10 @@ namespace optioncal{
         
     }
 
-    template<typename StrikeArray, typename Strike, typename MarketPrice, typename AssetPrice, typename Discount>
-    auto generateFOEstimate(const StrikeArray& strikes, const std::vector<MarketPrice>& options, const Discount& discount, const AssetPrice& stock, const Strike& minStrike, const Strike& maxStrike){
+    template<typename StrikeArray, typename Strike, typename MarketPrice, typename AssetPrice, typename R, typename T>
+    auto generateFOEstimate(const StrikeArray& strikes, const std::vector<MarketPrice>& options,  const AssetPrice& stock, const R& r, const T& t, const Strike& minStrike, const Strike& maxStrike){
         const int numStrikes=strikes.size();
+        const auto discount=exp(-r*t);
         StrikeArray paddedStrikes(numStrikes+2);
         paddedStrikes=futilities::for_each_parallel_subset(std::move(paddedStrikes), 1, 1, [&](const auto& v, const auto& i){
             return strikes[i-1]/stock;
@@ -193,7 +194,8 @@ namespace optioncal{
             spline=std::move(s), 
             minStrike=std::move(paddedStrikes.front()), 
             maxStrike=std::move(paddedStrikes.back()),
-            discount=std::move(discount)
+            discount=std::move(discount),
+            t=std::move(t)
         ](int N, const auto& uArray){
             const auto xMin=log(discount*minStrike);
             const auto xMax=log(discount*maxStrike);
@@ -209,35 +211,11 @@ namespace optioncal{
                 return valOrZero(optionPrice)-valOrZero(offset);
             }, [&](const auto& u, const auto& value){
                 const auto front=u*cmp*(1.0+u*cmp);
-                return log(1.0+front*value);
+                return log(1.0+front*value)/t;
             }, xMin, xMax, N);
         };   
 
     }
-
-
-/**
-
-template<typename IFS, typename Discount>
-    auto getCFFromMarketData(const IFS& instSpline, const std::vector<MarketPrice>& options, const Discount& discount, int N){
-        constexpr double upperBound=100;//arbitrary...this may be too high
-        const maxStrike=options.back()*upperBound;
-        const double dk=maxStrike/N;
-        const double du=2.0*M_PI/maxStrike; ///may want to compute this outside thsi function since this will be needed to discretize the CF
-        ///this should be min and max of call options.  The result iof the fft should be an approximate CF
-        return futilities::for_each_parallel(
-            ifft(futilities::for_each_parallel(0, N, [&](const auto& index){
-                auto pm=index%2==0?-1.0:1.0; //simpson's rule
-                auto currK=dk*index;
-                return instSpline(currK)*currK*currK*(3.0+pm)/3.0;
-            })),
-            [&](const auto& xn, const auto& index){
-                auto currU=du*index;
-                return currU*currU*xn;
-            }
-        );
-}*/
-
 
     template<typename PhiHat, typename LogCfFN, typename DiscreteU>
     auto getObjFn(PhiHat&& phiHattmp, LogCfFN&& cfFntmp, DiscreteU&& uArraytmp){
@@ -249,9 +227,14 @@ template<typename IFS, typename Discount>
             });
         };
     }
+    
     template<typename PhiHat, typename LogCfFN, typename DiscreteU>
     auto getObjFn_arr(PhiHat&& phiHattmp, LogCfFN&& cfFntmp, DiscreteU&& uArraytmp){
-        return [phiHat=std::move(phiHattmp), cfFn=std::move(cfFntmp), uArray=std::move(uArraytmp)](const auto& arrayParam){
+        return [
+            phiHat=std::move(phiHattmp), 
+            cfFn=std::move(cfFntmp), 
+            uArray=std::move(uArraytmp)
+        ](const auto& arrayParam){
             return futilities::sum(uArray, [&](const auto& u, const auto& index){
                 return std::norm(
                     phiHat[index]-cfFn(std::complex<double>(1.0, u), arrayParam)

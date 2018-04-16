@@ -1183,7 +1183,7 @@ TEST_CASE("objFn", "[OptionCalibration]"){
     });
     double minStrike=.004;
     double maxStrike=100;
-    auto estimateOfPhi=optioncal::generateFOEstimate(strikes, optionPrices, discount, stock, minStrike, maxStrike);
+    auto estimateOfPhi=optioncal::generateFOEstimate(strikes, optionPrices, stock, r, T, minStrike, maxStrike);
     //int N=20;
     
     //auto myCf=
@@ -1202,49 +1202,6 @@ TEST_CASE("objFn", "[OptionCalibration]"){
     );
     std::cout<<"guess=.4: "<<objFn(.4)<<std::endl;
     std::cout<<"guess=.3: "<<objFn(.3)<<std::endl;*/
-}
-
-TEST_CASE("Math test for inverse call DFT", "[OptionCalibration]"){
-    double stock=10.0;
-    double discount=1.0;
-    double sigma=.3;
-    double T=1.0;
-    double r=-log(discount)/T;
-    int n=128;
-    //double minK=exp(-61.8906)*stock/discount;
-    double minK=.0004; 
-    double maxK=25;
-    //double u=.25;
-    double u=6.0;
-    auto cfEmpSt=std::complex<double>(0.0, 0.0);
-    auto cfEmp=std::complex<double>(0.0, 0.0);
-    std::complex<double> im=std::complex<double>(0, 1);
-    double mxX=log(discount*maxK/stock);
-    double mnX=log(discount*minK/stock);
-    
-    for(int i=0; i<n;++i){
-        double dK=(mxX-mnX)/(n-1);
-        double modK=mnX+i*dK;
-        /*double strike=exp(modK)*stock/discount;
-        double extra=1-strike*discount/stock;
-        double modC=BSCall(stock, discount, strike, sigma, T)/stock-(extra>0?extra:0.0);*/
-
-        auto expX=exp(modK);
-        double strike=expX/discount;
-        double extra=1-expX;
-        double modC=BSCall(1.0, discount, strike, sigma, T)-(extra>0?extra:0.0);
-        auto cfIncr=exp(im*(u+im)*modK)*modC*dK/3.0;
-        auto cfIncrSt=exp(im*(u)*modK)*modC*dK/3.0;
-        cfEmp+=(cfIncr*((i==0||i==(n-1))?1.0:(i%2==0?2.0:4.0)));
-        cfEmpSt+=(cfIncrSt*((i==0||i==(n-1))?1.0:(i%2==0?2.0:4.0)));
-    }
-    auto tmpCF=[&](const auto& u){
-        return u*(r-sigma*sigma*.5)*T+sigma*sigma*.5*T*u*u;
-    };
-    //std::cout<<"actual cf@ "<<u<<": "<<((r-sigma*sigma*.5)*im*u-u*u*sigma*sigma*.5)*T<<", cf@ u-i: "<<((r-sigma*sigma*.5)*im*(u-im)-(u-im)*(u-im)*sigma*sigma*.5)*T<<", cffn@ u-i: "<<tmpCF(u*im+1.0)<<", estimated cf@ u+i: "<<log(1.0-u*(u+im)*cfEmp)+(u+im)*im*r*T<<", estimated cf@ u: "<<log(1.0+u*im*(u*im+1.0)*cfEmpSt)+u*im*r*T<<std::endl;
-    std::cout<<"actual cf u-i @ "<<u<<": "<<tmpCF(u*im+1.0)-(u-im)*im*T*r<<", estimated FO@ u: "<<log(1.0+u*im*(u*im+1.0)*cfEmpSt)<<std::endl;
-    std::cout<<"actual cf u @ "<<u<<": "<<tmpCF(u*im)-u*im*r*T<<", estimated FO@ u+i: "<<log(1.0-u*(u+im)*cfEmp)<<std::endl;
-    //estimate: (0.0188915,0.000244118), exact: (-0.00693957,0.0176715)
 }
 
 TEST_CASE("BSCal", "[OptionCalibration]"){
@@ -1287,7 +1244,7 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
     int N=1024;
     //std::vector<double> uArray={-6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6};
     auto uArray=getU(15);
-    const auto estimateOfPhiDHS=optioncal::generateFOEstimate(strikes, optionPrices, discount, stock, minStrike, maxStrike);
+    const auto estimateOfPhiDHS=optioncal::generateFOEstimate(strikes, optionPrices, stock, r, T, minStrike, maxStrike);
     
     auto phis=estimateOfPhiDHS(N, uArray);
     for(int i=0; i<phis.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
@@ -1298,7 +1255,7 @@ TEST_CASE("BSCal", "[OptionCalibration]"){
     auto objFn=optioncal::getObjFn(
         std::move(phis),
         [&](const auto& u, const auto& sigma){
-            return u*(-sigma*sigma*.5)*T+sigma*sigma*.5*T*u*u;
+            return u*(-sigma*sigma*.5)+sigma*sigma*.5*u*u;
         },
         std::move(uArray)
     ); 
@@ -1389,7 +1346,7 @@ TEST_CASE("HestonCal", "[OptionCalibration]"){
     std::cout<<"Heston with FFT: DHS"<<std::endl;
     int N=10000;
     auto uArray=getU(15);
-    const auto estimateOfPhiDHS=optioncal::generateFOEstimate(observedK, observedO, discount, S0, minStrike, maxStrike);
+    const auto estimateOfPhiDHS=optioncal::generateFOEstimate(observedK, observedO, S0, r, T, minStrike, maxStrike);
 
     auto phis=estimateOfPhiDHS(N, uArray);
 
@@ -1510,7 +1467,7 @@ TEST_CASE("CGMYCal", "[OptionCalibration]"){
     std::cout<<"CGMY with FFT: DHS"<<std::endl;
     int N=16384;
     auto uArray=getU(15);
-    const auto estimateOfPhiDHS=optioncal::generateFOEstimate(observedK, observedO, discount, S0, minStrike, maxStrike);
+    const auto estimateOfPhiDHS=optioncal::generateFOEstimate(observedK, observedO, S0, r, T, minStrike, maxStrike);
 
     auto phis=estimateOfPhiDHS(N, uArray);
     for(int i=0; i<phis.size(); ++i){ //*std::complex<double>(0, 1.0)+1.0
