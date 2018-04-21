@@ -145,15 +145,12 @@ namespace optioncal{
         ](int N, const auto& uArray){
             const auto xMin=log(discount*minStrike);
             const auto xMax=log(discount*maxStrike);
-            auto valOrZero=[](const auto& v){
-                return v>0.0?v:0.0;
-            };
             return DFT(uArray, [&](const auto& u, const auto& x, const auto& index){
                 const auto expX=exp(x);
                 const auto strike=expX/discount;
                 const auto offset=1.0-exp(x);
                 const auto optionPrice=spline(strike);
-                return valOrZero(optionPrice);
+                return maxZeroOrNumber(optionPrice);
             }, [&](const auto& u, const auto& value){
                 const auto front=u*cmp*(1.0+u*cmp);
                 return log(1.0+front*value);
