@@ -6,3 +6,9 @@ optionPricing
 error.log
 *.gcda
 *.gcno
+*.csv
+
+*0**.pdf
+
+*.gz
+*.log

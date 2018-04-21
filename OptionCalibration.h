@@ -6,9 +6,8 @@
 #include "FunctionalUtilities.h"
 #include "fft.h"
 #include <tuple>
-#include "spline.h"
+#include "monotone_spline.h"
 #include "Newton.h"
-//#include "optim.hpp"
 
 
 /** 
@@ -70,11 +69,8 @@ namespace optioncal{
             const auto currO=std::get<OJ>(tuple);
 
             const auto currExp=exp(std::complex<double>(0.0, currX)*u);
-            //const auto currExp=exp(currX*u);
             const auto prevExp=exp(std::complex<double>(0.0, prevX)*u);
-            //const auto prevExp=exp(prevX*u);
             const auto nextExp=exp(std::complex<double>(0.0, nextX)*u);
-            //const auto nextExp=exp(nextX*u);
 
             //equation 3.10 
             const auto retVal=currO*((currExp-prevExp)/(currX-prevX)-(nextExp-currExp)/(nextX-currX))/(u*u);
@@ -82,13 +78,6 @@ namespace optioncal{
             return currX<0&&nextX>=0?retVal+(1.0+(nextExp*currX-currExp*nextX)/(nextX-currX))/(u*u):retVal;
         });
     }
-
-    /*double BSCall(double S0, double discount, double k, double sigma, double T){
-        double s=sqrt(2.0);
-        double sigmasqrt=sqrt(T)*sigma;
-        auto d1=log(S0/(discount*k))/(sigmasqrt)+sigmasqrt*.5;
-        return S0*(.5+.5*erf(d1/s))-k*discount*(.5+.5*(erf((d1-sigmasqrt)/s)));
-    }*/
 
     template<typename Strike, typename MarketPrice, typename AssetValue, typename Discount>
     auto generateFOEstimateSp(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount, const Strike& maxStrike){
@@ -167,33 +156,94 @@ namespace optioncal{
         
     }
 
-    template<typename StrikeArray, typename Strike, typename MarketPrice, typename AssetPrice, typename R, typename T>
-    auto generateFOEstimate(const StrikeArray& strikes, const std::vector<MarketPrice>& options,  const AssetPrice& stock, const R& r, const T& t, const Strike& minStrike, const Strike& maxStrike){
-        const int numStrikes=strikes.size();
-        const auto discount=exp(-r*t);
-        StrikeArray paddedStrikes(numStrikes+2);
-        paddedStrikes=futilities::for_each_parallel_subset(std::move(paddedStrikes), 1, 1, [&](const auto& v, const auto& i){
-            return strikes[i-1]/stock;
-        });
-        paddedStrikes[0]=minStrike/stock;
-        paddedStrikes[numStrikes+1]=maxStrike/stock;
-        std::vector<MarketPrice> optionPrices(numStrikes+2);
-        optionPrices=futilities::for_each_parallel_subset(std::move(optionPrices), 1, 1, [&](const auto& v, const auto& i){
-            return options[i-1]/stock;
-        });
-        optionPrices[0]=(stock-minStrike*discount)/stock; //close to just being the stock price
-        optionPrices[numStrikes+1]=0.0; //just 0 at the end
+    template<typename T>
+    auto transformPrice(const T& p, const T& v){
+        return p/v;
+    }
 
-        tk::spline s;
-        s.set_points(paddedStrikes, optionPrices);
-        /*for(int i=0; i<128; ++i){
-            double strike=-5.0+i*(8.0)/127.0;
-            std::cout<<"strike: "<<exp(strike)<<", option: "<<s(exp(strike))<<std::endl;
-        }*/
+    template<typename Stock, typename V, typename FN>
+    auto transformPrices(const std::vector<V>& arr, const Stock& asset, const V& minV, const V& maxV, FN&& transform){
+        const int arrLength=arr.size();
+        std::vector<V> paddedArr(arrLength+2);
+        paddedArr=futilities::for_each_parallel_subset(std::move(paddedArr), 1, 1, [&](const auto& v, const auto& index){
+            return transform(arr[index-1], asset, index);
+        });
+        paddedArr.front()=transform(minV, asset, 0);
+        paddedArr.back()=transform(maxV, asset, arrLength);
+        return std::move(paddedArr);
+    }
+    template<typename Stock, typename V>
+    auto transformPrices(const std::vector<V>& arr, const Stock& asset, const V& minV, const V& maxV){
+        return transformPrices(arr, asset, minV, maxV, [](const auto& p, const auto& v, const auto& index){
+           return transformPrice(p, v);
+        });
+    }
+
+    template<typename Arr, typename FN1, typename FN2, typename FN3>
+    auto filter(const Arr& arr, FN1&& cmp, FN2&& fv1, FN3&& fv2){
+        Arr v1;
+        Arr v2;
+        for(int i=0; i<arr.size();++i){
+            const auto x=arr[i];
+            if(cmp(x, i)){
+                v1.emplace_back(fv1(x, i));
+            }else{
+                v2.emplace_back(fv2(x, i));
+            }
+        }
+        return std::make_tuple(v1, v2);
+    }
+
+    template< typename Strike, typename MarketPrice, typename AssetPrice, typename Discount>
+    auto getOptionSpline(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options,  const AssetPrice& stock, const Discount& discount, const Strike& minStrike, const Strike& maxStrike){
+        auto paddedStrikes=transformPrices(strikes, stock, minStrike, maxStrike);
+        const auto minOption=stock-minStrike*discount;
+        const auto maxOption=0.0000001;
+        auto valOrZero=[](const auto& v){
+            return v>0.0?v:0.0;
+        };
+        auto optionPrices=transformPrices(options, stock, minOption, maxOption);
+       
+        const auto threshold=.95;//this is rather arbitrary
+   
+        auto filteredStrikes=filter(paddedStrikes, [&](const auto& x, const auto& i){
+            return x<threshold;
+        }, [&](const auto& x, const auto& i){
+            return x;
+        }, [&](const auto& x, const auto& i){
+            return x;
+        });
+
+        auto filteredPrices=filter(optionPrices, [&](const auto& x, const auto& i){
+            return paddedStrikes[i]<threshold;
+        }, [&](const auto& x, const auto& i){
+            return x-valOrZero(1-paddedStrikes[i]*discount);
+        }, [&](const auto& x, const auto& i){
+            return log(x);
+        });
+        auto sLow=spline::generateSpline(std::move(std::get<0>(filteredStrikes)), std::move(std::get<0>(filteredPrices)));
+        auto sHigh=spline::generateSpline(std::move(std::get<1>(filteredStrikes)), std::move(std::get<1>(filteredPrices)));
+
+        return [sLow=std::move(sLow), sHigh=std::move(sHigh), valOrZero=std::move(valOrZero), discount=std::move(discount), threshold=std::move(threshold)](const auto& k){
+            if(k<threshold){
+                return sLow(k);
+            }
+            else {
+                return exp(sHigh(k))-valOrZero(1-k*discount);
+            }
+        };
+        
+    }
+
+
+    template<typename Strike, typename MarketPrice, typename AssetPrice, typename R, typename T>
+    auto generateFOEstimate(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options,  const AssetPrice& stock, const R& r, const T& t, const Strike& minStrike, const Strike& maxStrike){
+        auto discount=exp(-r*t);
+        auto s=getOptionSpline(strikes, options, stock, discount, minStrike, maxStrike);
         return [
             spline=std::move(s), 
-            minStrike=std::move(paddedStrikes.front()), 
-            maxStrike=std::move(paddedStrikes.back()),
+            minStrike=transformPrice(minStrike, stock), 
+            maxStrike=transformPrice(maxStrike, stock),
             discount=std::move(discount),
             t=std::move(t)
         ](int N, const auto& uArray){
@@ -205,27 +255,15 @@ namespace optioncal{
             return DFT(uArray, [&](const auto& u, const auto& x, const auto& index){
                 const auto expX=exp(x);
                 const auto strike=expX/discount;
-                const auto offset=1.0-expX;
+                const auto offset=1.0-exp(x);
                 const auto optionPrice=spline(strike);
-                //const auto optionPrice=BSCall(1.0, discount, strike, .3, 1.0);
-                return valOrZero(optionPrice)-valOrZero(offset);
+                return valOrZero(optionPrice);
             }, [&](const auto& u, const auto& value){
                 const auto front=u*cmp*(1.0+u*cmp);
-                return log(1.0+front*value)/t;
+                return log(1.0+front*value);
             }, xMin, xMax, N);
         };   
 
-    }
-
-    template<typename PhiHat, typename LogCfFN, typename DiscreteU>
-    auto getObjFn(PhiHat&& phiHattmp, LogCfFN&& cfFntmp, DiscreteU&& uArraytmp){
-        return [phiHat=std::move(phiHattmp), cfFn=std::move(cfFntmp), uArray=std::move(uArraytmp)](const auto&... params){
-            return futilities::sum(uArray, [&](const auto& u, const auto& index){
-                return std::norm(
-                    phiHat[index]-cfFn(std::complex<double>(1.0, u), params...)
-                )/(double)uArray.size();         
-            });
-        };
     }
     
     template<typename PhiHat, typename LogCfFN, typename DiscreteU>
@@ -242,18 +280,6 @@ namespace optioncal{
             });
         };
     }
-    /**fn is the result from getObjFn*/
-    template<typename FN, typename ...Params>
-    auto calibrate(const FN& fn, const Params&... params){
-        const int maxIter=500;
-        const double prec=.00001; 
-        const double peterb=.000001;
-        static const std::size_t value = sizeof...(Params);
-        const double alpha=.01; //needs a very small step or it goes off to no where
-        return newton::gradientDescentApprox(fn, maxIter, prec, peterb, alpha, params...);
-    }
-
-
 
 }
 
