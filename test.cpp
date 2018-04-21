@@ -1197,3 +1197,13 @@ TEST_CASE("getObjfn_arr", "[OptionCalibration]"){
     REQUIRE(hoc(tmp)==expected);
 
 }
+TEST_CASE("getKThatIsBelowOne with exactly 1", "[OptionCalibration]"){
+    std::vector<double> arr={.8, .9, 1, 1.1, 1.2};
+    int expected=2;
+    REQUIRE(optioncal::getKThatIsBelowOne(arr)==expected);
+}
+TEST_CASE("getKThatIsBelowOne with no exact 1", "[OptionCalibration]"){
+    std::vector<double> arr={.8, .9, 1.1, 1.2};
+    int expected=1;
+    REQUIRE(optioncal::getKThatIsBelowOne(arr)==expected);
+}

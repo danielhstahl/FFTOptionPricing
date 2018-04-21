@@ -78,7 +78,7 @@ namespace optioncal{
     }
 
     template<typename Arr, typename FN1, typename FN2, typename FN3>
-    auto filter(const Arr& arr, FN1&& cmp, FN2&& fv1, FN3&& fv2){
+    auto filter(const Arr& arr, const FN1& cmp, FN2&& fv1, FN3&& fv2){
         Arr v1;
         Arr v2;
         for(int i=0; i<arr.size();++i){
@@ -92,6 +92,16 @@ namespace optioncal{
         return std::make_tuple(v1, v2);
     }
 
+    template<typename Arr>
+    auto getKThatIsBelowOne(const Arr& paddedStrikes){
+        int n=paddedStrikes.size();
+        int i=0;
+        while(paddedStrikes[i]<=1&& i<n){
+            ++i;
+        }
+        return i-1;
+    }
+
     template< typename Strike, typename MarketPrice, typename AssetPrice, typename Discount>
     auto getOptionSpline(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options,  const AssetPrice& stock, const Discount& discount, const Strike& minStrike, const Strike& maxStrike){
         auto paddedStrikes=transformPrices(strikes, stock, minStrike, maxStrike);
@@ -99,29 +109,43 @@ namespace optioncal{
         const auto maxOption=0.0000001;
         
         auto optionPrices=transformPrices(options, stock, minOption, maxOption);
-       
-        const auto threshold=.95;//this is rather arbitrary
-   
-        auto filteredStrikes=filter(paddedStrikes, [&](const auto& x, const auto& i){
-            return x<threshold;
-        }, [&](const auto& x, const auto& i){
-            return x;
-        }, [&](const auto& x, const auto& i){
-            return x;
-        });
+        
+        const auto thresholdIndex=getKThatIsBelowOne(paddedStrikes);
+        auto threshold=(paddedStrikes[thresholdIndex]+paddedStrikes[thresholdIndex-1])*.5;//average
+        
+        auto thresholdCondition=[threshold=std::move(threshold)](const auto& x){
+            return x<threshold;//have to have at least 2 strikes below 1 in the upper spline
+        };
 
-        auto filteredPrices=filter(optionPrices, [&](const auto& x, const auto& i){
-            return paddedStrikes[i]<threshold;
-        }, [&](const auto& x, const auto& i){
-            return x-maxZeroOrNumber(1-paddedStrikes[i]*discount);
-        }, [&](const auto& x, const auto& i){
-            return log(x);
-        });
+        auto filteredStrikes=filter(
+            paddedStrikes, 
+            [&](const auto& k, const auto& i){
+                return thresholdCondition(k);
+            }, 
+            [&](const auto& k, const auto& i){
+                return k;
+            }, [&](const auto& k, const auto& i){
+                return k;
+            }
+        );
+
+        auto filteredPrices=filter(
+            optionPrices, 
+            [&](const auto& price, const auto& i){
+                return thresholdCondition(paddedStrikes[i]);
+            }, 
+            [&](const auto& price, const auto& i){
+                return price-maxZeroOrNumber(1-paddedStrikes[i]*discount);
+            }, [&](const auto& price, const auto& i){
+                return log(price);
+            }
+        );
+        
         auto sLow=spline::generateSpline(std::move(std::get<0>(filteredStrikes)), std::move(std::get<0>(filteredPrices)));
         auto sHigh=spline::generateSpline(std::move(std::get<1>(filteredStrikes)), std::move(std::get<1>(filteredPrices)));
 
-        return [sLow=std::move(sLow), sHigh=std::move(sHigh), discount=std::move(discount), threshold=std::move(threshold)](const auto& k){
-            if(k<threshold){
+        return [sLow=std::move(sLow), sHigh=std::move(sHigh), discount=std::move(discount), thresholdCondition=std::move(thresholdCondition)](const auto& k){
+            if(thresholdCondition(k)){
                 return sLow(k);
             }
             else {
@@ -145,12 +169,15 @@ namespace optioncal{
         ](int N, const auto& uArray){
             const auto xMin=log(discount*minStrike);
             const auto xMax=log(discount*maxStrike);
+            auto valOrZero=[](const auto& v){
+                return v>0.0?v:0.0;
+            };
             return DFT(uArray, [&](const auto& u, const auto& x, const auto& index){
                 const auto expX=exp(x);
                 const auto strike=expX/discount;
                 const auto offset=1.0-exp(x);
                 const auto optionPrice=spline(strike);
-                return maxZeroOrNumber(optionPrice);
+                return valOrZero(optionPrice);
             }, [&](const auto& u, const auto& value){
                 const auto front=u*cmp*(1.0+u*cmp);
                 return log(1.0+front*value);
