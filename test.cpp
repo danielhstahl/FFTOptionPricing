@@ -1146,3 +1146,54 @@ TEST_CASE("FangOostDegenerateBS", "[OptionPricing]"){
     auto myReference= BSCall(S0, discount, KArray[1], sig, T);
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
 }
+
+TEST_CASE("transformPrices", "[OptionCalibration]"){
+    std::vector<double> arr={3, 4, 5};
+    double asset=4.0;
+    double minV=2.0;
+    double maxV=6.0;
+    auto result=optioncal::transformPrices(arr, asset, minV, maxV);
+    std::vector<double> expected={.5, .75, 1.0, 1.25, 1.5};
+    REQUIRE(result==expected);
+}
+
+TEST_CASE("filter returns empty first array when condition never met", "[OptionCalibration]"){
+    std::vector<double> arr={3, 4, 5};
+    std::vector<double> expected1={};
+    std::vector<double> expected2=arr;
+    auto result=optioncal::filter(arr, [](const auto& x, const auto& index){
+            return false;
+        }, 
+        [](const auto& x, const auto& index){return x;}, 
+        [](const auto& x, const auto& index){return x;}
+    );
+    REQUIRE(std::get<0>(result)==expected1);
+    REQUIRE(std::get<1>(result)==expected2);
+}
+
+TEST_CASE("filter returns two arrays when condition sometimes met", "[OptionCalibration]"){
+    std::vector<double> arr={3, 4, 5};
+    std::vector<double> expected1={3, 5};
+    std::vector<double> expected2={4};
+    auto result=optioncal::filter(arr, [](const auto& x, const auto& index){
+        return index%2==0;
+    }, [](const auto& x, const auto& index){return x;}, [](const auto& x, const auto& index){return x;});
+    REQUIRE(std::get<0>(result)==expected1);
+    REQUIRE(std::get<1>(result)==expected2);
+}
+TEST_CASE("getObjfn_arr", "[OptionCalibration]"){
+    std::vector<std::complex<double> > arr={
+        std::complex<double>(3, 0), 
+        std::complex<double>(4, 0), 
+        std::complex<double>(5, 0)
+    };
+    std::vector<double> u={6, 7, 8};
+    auto cf=[](const auto& cmpU, const auto& _){
+        return std::complex<double>(cmpU.imag(), 0.0);
+    };
+    auto hoc=optioncal::getObjFn_arr(std::move(arr), std::move(cf), std::move(u));
+    double expected=9;//3*3^2/3
+    double tmp=0;
+    REQUIRE(hoc(tmp)==expected);
+
+}
