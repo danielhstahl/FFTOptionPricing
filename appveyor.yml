@@ -23,12 +23,11 @@ install:
   - cmd: git clone https://github.com/phillyfan1138/RungeKutta
   - cmd: git clone https://github.com/phillyfan1138/FangOost
   - cmd: git clone https://github.com/phillyfan1138/CharacteristicFunctions
+  - cmd: git clone https://github.com/phillyfan1138/cuckoo_search
+  - cmd: git clone https://github.com/phillyfan1138/MonteCarlo
   - cmd: cd fft
   - cmd: make
 
 build: off
 test: off
-
-
-
 

@@ -7,8 +7,6 @@
 #include "fft.h"
 #include <tuple>
 #include "monotone_spline.h"
-#include "Newton.h"
-
 
 /** 
  * Optimization specific
@@ -25,86 +23,11 @@
  * */
 namespace optioncal{
 
-    /**
-     * equation 2.8
-     * */
-    template<typename MarketPrice, typename AssetValue, typename Strike, typename Discount>
-    auto oJ(const MarketPrice& price, const AssetValue& stock, const Strike& strike,  const Discount& discount){
-        auto transformStrike=1.0-strike*discount/stock;
-        auto transformStrikePlus=transformStrike>0?transformStrike:0.0;
-        return price/stock-transformStrikePlus;
-    }
-    /**
-     * equation 2.9
-     * */
-    template<typename AssetValue, typename Strike, typename Discount>
-    auto xJ(const AssetValue& stock, const Strike& strike, const Discount& discount){
-        return log(strike*discount/stock);
-    }
-    template<typename AssetValue, typename Strike, typename Discount>
-    auto kX(const AssetValue& stock, const Strike& x, const Discount& discount){
-        return stock*exp(x)/discount;
-    }
     template<typename T>
     auto maxZeroOrNumber(const T& num){
         return num>0.0?num:T(0.0);
     }
-    constexpr int XJ=0;
-    constexpr int OJ=1;
     constexpr auto cmp=std::complex<double>(0, 1);
-
-
-    /**
-    u is real (not complex)
-    knots_gamma MUST be in order (least to greatest in x)
-    */
-    template<typename U, typename Tuple>
-    auto fSpline(const U& u, const std::vector<Tuple>& knots_gamma){
-        const int startFrom=1;
-        const int endFrom=1;
-        return futilities::sum_subset(knots_gamma, startFrom, endFrom, [&](const auto& tuple, const auto& index){
-            const auto currX=std::get<XJ>(tuple);
-            const auto prevX=std::get<XJ>(knots_gamma[index-1]);
-            const auto nextX=std::get<XJ>(knots_gamma[index+1]);
-            const auto currO=std::get<OJ>(tuple);
-
-            const auto currExp=exp(std::complex<double>(0.0, currX)*u);
-            const auto prevExp=exp(std::complex<double>(0.0, prevX)*u);
-            const auto nextExp=exp(std::complex<double>(0.0, nextX)*u);
-
-            //equation 3.10 
-            const auto retVal=currO*((currExp-prevExp)/(currX-prevX)-(nextExp-currExp)/(nextX-currX))/(u*u);
-            //find the "j0-1" and "j0"
-            return currX<0&&nextX>=0?retVal+(1.0+(nextExp*currX-currExp*nextX)/(nextX-currX))/(u*u):retVal;
-        });
-    }
-
-    template<typename Strike, typename MarketPrice, typename AssetValue, typename Discount>
-    auto generateFOEstimateSp(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options, const AssetValue& stock, const Discount& discount, const Strike& maxStrike){
-        int numStrikes=strikes.size();
-        auto knots_gamma_tmp=std::vector<std::tuple<Strike, AssetValue> >(numStrikes+2);
-        int lengthFromEdge=1;
-        knots_gamma_tmp=futilities::for_each_parallel_subset(std::move(knots_gamma_tmp), lengthFromEdge, lengthFromEdge, [&](const auto& v, const auto& index){
-            const auto pIndex=index-lengthFromEdge;
-            const auto xj=xJ(stock, strikes[pIndex], discount);
-            return std::make_tuple(xJ(stock, strikes[pIndex], discount), oJ(options[pIndex], stock, strikes[pIndex], discount));
-        });
-
-        knots_gamma_tmp[0]=std::make_tuple(
-            xJ(stock, stock/maxStrike, discount),
-            0.0
-        );
-        knots_gamma_tmp[numStrikes+lengthFromEdge]=std::make_tuple(
-            xJ(stock, stock*maxStrike, discount),
-            0.0
-        );
-
-        return [knots_gamma = std::move(knots_gamma_tmp)](const auto& u){
-            const auto uPlusi=std::complex<double>(0.0, 1.0)+u;
-            //equation 3.1...note that we are solving for the single argument "u" into the analytical CF
-            return u==0?0.0:log(1.0-uPlusi*u*fSpline(uPlusi, knots_gamma));
-        };
-    }
 
     auto getDU(int N, double uMax){
         return 2.0*uMax/N;
@@ -116,31 +39,6 @@ namespace optioncal{
         return M_PI*(N-1)/(xMax-xMin);
     }
     
-    template<typename PhiHatFn, typename LogCfFN, typename DiscreteU, typename Strike, typename AssetValue, typename Discount>
-    auto getObjFnSpline(PhiHatFn&& phiHatFntmp, LogCfFN&& cfFntmp, int N, const Strike& minStrike, const Strike& maxStrike, const AssetValue& stock , const Discount& discount){
-        auto xMin=xJ(stock, minStrike, discount);
-        auto xMax=xJ(stock, maxStrike, discount);
-        return [phiHatFn=std::move(phiHatFntmp), cfFn=std::move(cfFntmp), N, xM=std::move(xMin), xP=std::move(xMax)](const auto&... params){
-            const auto uMax=getUMax(N, xM, xP);
-            const auto du=getDU(N, uMax);
-            auto uArray=futilities::for_each_parallel(0, N, [&](const auto& index){
-                return index*du-uMax;
-            }); 
-            //return 
-            //taking average of u over domain and then returning the norm of the difference
-            return std::norm(
-                (
-                    futilities::sum(phiHatFn(N), [&](const auto& u, const auto& index){
-                        return u; 
-                    })-
-                    futilities::sum(uArray, [&](const auto& u, const auto& index){
-                        return cfFn(u*cmp, params...);
-                    })
-                )/(double)uArray.size()           
-            );
-        };
-    }
-
     template<typename ArrayU, typename Fn, typename ApplyEachSum, typename T>
     auto DFT(const std::vector<ArrayU>& uArray, Fn&& fn, ApplyEachSum&& fnU, const T& xMin, const T& xMax, int N){
         T dx=(xMax-xMin)/(N-1);
@@ -199,9 +97,7 @@ namespace optioncal{
         auto paddedStrikes=transformPrices(strikes, stock, minStrike, maxStrike);
         const auto minOption=stock-minStrike*discount;
         const auto maxOption=0.0000001;
-        auto valOrZero=[](const auto& v){
-            return v>0.0?v:0.0;
-        };
+        
         auto optionPrices=transformPrices(options, stock, minOption, maxOption);
        
         const auto threshold=.95;//this is rather arbitrary
@@ -217,19 +113,19 @@ namespace optioncal{
         auto filteredPrices=filter(optionPrices, [&](const auto& x, const auto& i){
             return paddedStrikes[i]<threshold;
         }, [&](const auto& x, const auto& i){
-            return x-valOrZero(1-paddedStrikes[i]*discount);
+            return x-maxZeroOrNumber(1-paddedStrikes[i]*discount);
         }, [&](const auto& x, const auto& i){
             return log(x);
         });
         auto sLow=spline::generateSpline(std::move(std::get<0>(filteredStrikes)), std::move(std::get<0>(filteredPrices)));
         auto sHigh=spline::generateSpline(std::move(std::get<1>(filteredStrikes)), std::move(std::get<1>(filteredPrices)));
 
-        return [sLow=std::move(sLow), sHigh=std::move(sHigh), valOrZero=std::move(valOrZero), discount=std::move(discount), threshold=std::move(threshold)](const auto& k){
+        return [sLow=std::move(sLow), sHigh=std::move(sHigh), discount=std::move(discount), threshold=std::move(threshold)](const auto& k){
             if(k<threshold){
                 return sLow(k);
             }
             else {
-                return exp(sHigh(k))-valOrZero(1-k*discount);
+                return exp(sHigh(k))-maxZeroOrNumber(1-k*discount);
             }
         };
         

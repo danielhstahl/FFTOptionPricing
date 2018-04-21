@@ -1,4 +1,4 @@
-INCLUDES=-I ../FunctionalUtilities -I ../RungeKutta -I ../CharacteristicFunctions -I ../FangOost -I ../GaussNewton -I ../TupleUtilities -I ../AutoDiff -I../cuckoo_search -I../MonteCarlo
+INCLUDES=-I ../FunctionalUtilities -I ../RungeKutta -I ../CharacteristicFunctions -I ../FangOost -I ../MonteCarlo  -I../cuckoo_search 
 
 
 GCCVAL=g++
@@ -11,9 +11,9 @@ endif
 
 test:test.o
 	$(GCCVAL) -std=c++14 -O3  -pthread --coverage test.o $(INCLUDES) -o test -fopenmp
-test.o: test.cpp fft.h fft.hpp OptionPricing.h OptionCalibration.h
+test.o: test.cpp fft.h fft.hpp OptionPricing.h OptionCalibration.h monotone_spline.h
 	$(GCCVAL) -std=c++14 -O3 -D VERBOSE_FLAG=1 -pthread --coverage -c test.cpp  $(INCLUDES) -fopenmp
 clean:
-	-rm *.o test
+	-rm *.o test *.csv
 
 
