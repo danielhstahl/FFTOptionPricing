@@ -114,7 +114,7 @@ namespace optioncal{
         auto threshold=(paddedStrikes[thresholdIndex]+paddedStrikes[thresholdIndex-1])*.5;//average
         
         auto thresholdCondition=[threshold=std::move(threshold)](const auto& x){
-            return x<threshold;//have to have at least 2 strikes below 1 in the upper spline
+            return x<threshold;
         };
 
         auto filteredStrikes=filter(
