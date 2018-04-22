@@ -26,3 +26,6 @@ Benefits to Fang Oosterlee:  Fast convergence in u.  U and X are separate and so
 
 See the [tests](./test.cpp) for examples on how to use each of these algorithms.
 
+## Generate charts and calibration documentation
+
+For the calibration aspect, run `make generateCharts` and then run `./generateCharts`.  Then open `OptionCalibration.Rnw` in RStudio and compile as PDF.  

@@ -9,6 +9,6 @@ error.log
 *.csv
 
 *0**.pdf
-
+generateCharts
 *.gz
 *.log
