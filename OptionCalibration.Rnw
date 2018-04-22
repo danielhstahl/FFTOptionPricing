@@ -1,0 +1,300 @@
+\documentclass{article}
+\usepackage{amsfonts}
+\usepackage{hyperref} 
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+\section{Introduction}
+The problem of calibrating option prices to market values (the ``inverse problem'') is non-trivial especially with complex pricing models with many parameters.  A naive approach is to perform optimization by minimizing a distance between the prices provided by the market and the modeled prices by varying the input parameters.  However, this can be computationally intensive.  The problem is not convex and there may be a plethora of local minima. The parameter surface may have many ``flat'' areas leading to unstable parameter solutions.  
+\\
+\\
+Due to the issues arround optimization and given that practioners require efficient market calibration, we choose our pricing modeling framework in light of optimization instead of choosing the framework which may best fit the market.  In a now classic paper, Carr, Madan, Geman, and Yor (2003) demonstrate that asset prices may not have a diffusion component and can be modeled as a pure jump process with infinite activity.  However, Huang and Wu (2004) show that when accounting for the leverage effect, the diffusion component does have a significant impact.  This is due to the empirical fact that asset returns and asset volatility are correlated.  One of the only tractable ways to generate this correlation is by modeling time changes as integrated diffusions.  
+\\
+\\
+In our study, we find that it is very difficult to solve the inverse problem for Levy-processes of infinite activity.  We therefore eschew the empirical results of CGMY and focus only on finite-activity jump diffusions a la Merton (1976).  However, we do allow for a time-changed diffusion component.  The models thus incorporate popular models like Heston's as a special case.  
+\\
+\\
+All the code is available at the following Github repo: \href{https://github.com/phillyfan1138/FFTOptionPricing/tree/calibrationResults}{FFTOptionPricing}.  
+
+%Huang and wu: https://pdfs.semanticscholar.org/67cd/b553e2624c79a960ff79d0dfe6e6833690a7.pdf
+%Merton: http://www.people.hbs.edu/rmerton/optionpricingwhenunderlingstock.pdf
+
+\section{The model}
+
+Levy processes can be constructed with relatively simple characteristic exponents.  In this paper we will focus on processes with characteristic exponents of the following form:
+
+\[\psi(u)=-\frac{\sigma^2 u^2}{2}+\lambda \left(1-e^{\mu_j+\sigma_j ^2 /2}\right)+\lambda \left(e^{\mu_j u i-\sigma_j ^2 u^2 /2}-1\right)\]
+\[=-\frac{\sigma^2 u^2}{2}-\psi_j(-i)+psi_j(u)\]
+Where \(\psi_j(u):=\lambda \left( e^{\mu_j u i-\sigma_j ^2 u^2 /2}-1 \right)\) is the characteristic function of the jump component.  \(\psi(u)\) is the characteristic exponent of a Merton jump-diffusion model.  Following Carr and Wu (2004), we also introduce a random time change so that the characteristic function of the normalized log asset is as follows:
+
+\[\mathbb{E}[e^{ui X_t}]=g(-\psi(u), a, a-\sigma_v \rho u \sigma, \sigma_v, v_0)  \]
+
+Where \(X_t=\mathrm{log}\left(\frac{S_t}{S_0}\right)-rt \), and \(g\) is the moment generating function of an integrated CIR process:
+
+\[g(x, a, \kappa, \sigma_v, v_0)=e^{-b(t)v_0-c(t)}\]
+Where 
+\[b(t)=2x\left(1-e^{-\delta t}\right)/\left(\delta+\kappa+(\delta-\kappa) e^{-\delta t}\right)\]
+\[c(t)=\left(\frac{a}{\sigma^2}\right)\left(2\mathrm{log}\left(1+(\kappa-\delta)\left(1-e^{-\delta t}\right)/2\delta \right) +\left(1-e^{-\delta t}\right)(\kappa-\delta)\right)\]
+\[\delta=\sqrt{\kappa^2+2x \sigma_v^2}\]
+
+\section{Calibration}
+
+Calibration has traditionally taken the following form:
+
+\[\min_\theta \sum_k w_k \left(C_k-C(k; \theta)\right)^2 \]
+Where \(w_k\) is a weight, \(\theta\) are the parameters describing the (risk-neutral) asset process, \(C_k\) is the observed option prices at log-strike \(k\), and \(C(k, \theta)\) is the modeled price.  
+\\
+\\
+As mentioned in the introduction, this problem is not trivial.  See Tankov (2004) for details.  Since we are dealing with Levy processes, we instead consider minimizing the following:
+\[\min_\theta ||\psi(u_l; \theta)-\hat{\psi}(u_l; k)||\]
+
+We can borrow from Carr and Madan (1999) and  Belomestny and Reiß (2006) to create the estimate \(\hat{\psi}\) from the observed option data:
+\[ \mathrm{log}\left(1+iu(iu+1)\int_{-\infty} ^{\infty} e^{uix} O(x) dx\right)=\psi(u-i, t)\]
+Where \(O(x)=C_{x+\mathrm{log}(S_0)+rt}/S_0-\left(1-e^{x}/S_0\right)^+\) and \(x=k-\mathrm{log}(S_0)-rt\).  Since we do not observe a continuum of option prices in the market, we use a monotonic spline to interpolate the option prices.  To preserve accuracy, we use a two part spline fit.  The first fit uses the realized \(O_k=C_k/S_0-\left(1-e^{k-rT}\right)^+\) until \(e^{k}/S_0 < 1-\alpha\) for some \(\alpha\).  We choose \(\alpha=.05\) which seems to provide good results.  The second fit is the log of normalized option prices \(\mathrm{log}\left(C_k/S_0\right)\).
+\\
+\\
+There are three sources of error in the estimate:
+\begin{enumerate}
+\item The observation error in the options themselves
+\item The error in the spline approximation
+\item The error in numerically integrating the observed options prices
+\end{enumerate}
+
+\subsection{Spline Error}
+
+\subsubsection{Black Scholes}
+We first test the spline error on a Black-Scholes model.  The parameters chosen are \(S=10\), \(r=0\), \(t=1\), \(\sigma=.3\), and the strike array \(4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16\).
+This model shows very good alignment when choosing a spline on the log of the option price against the strike as can be seen in the following charts.  Note that the black line is estimated, while the red line is actual.  The red line completely covers the black line.
+
+<<echo=FALSE>>=
+globalSpline="Spline"
+
+globalIntegration="Integration"
+globalParameters="Parameters"
+baseUrl="./"
+plotSpline=function(k){
+  plot(k$strike, k$price, type='l', xlab="Strike Price", ylab="Option Price")
+  lines(k$strike, k$actual, col='red')
+}
+plotIntegration=function(integration, type){
+  exact=integration[[paste0("exact", type)]]
+  estimate=integration[[paste0("estimate", type)]]
+  plot(integration$u, exact, type='l', xlab="u", ylab="psi(u)", col='blue')
+  title(paste0("Actual vs Estimated CF: ", type))
+  lines(integration$u, estimate,  col='red')
+}
+
+@
+
+<<fig=T, echo=FALSE>>=
+bs="BlackScholes"
+
+k=read.csv(paste0(baseUrl, bs, globalSpline, ".csv"))
+plotSpline(k)
+
+@
+
+\subsubsection{Heston}
+
+We then fit the spline for a Heston model.  The parameters chosen are the strike array \((95,100,130,150,160,165,170,175,185,190,195,200,210,240,250)\).
+
+<<fig=T, echo=FALSE>>=
+heston="Heston"
+k=read.csv(paste0(baseUrl, heston, globalSpline, ".csv"))
+plotSpline(k)
+
+@
+
+
+\subsubsection{CGMY}
+
+We then fit the spline for a CGMY model.
+
+<<fig=T, echo=FALSE>>=
+cgmy="CGMY"
+k=read.csv(paste0(baseUrl, cgmy, globalSpline, ".csv"))
+plotSpline(k)
+@
+
+\subsubsection{Merton}
+
+We then fit the spline for a Merton jump diffusion model.
+
+<<fig=T, echo=FALSE>>=
+merton="Merton"
+k=read.csv(paste0(baseUrl, merton, globalSpline, ".csv"))
+plotSpline(k)
+@
+
+\subsubsection{Actual Call prices}
+
+We use Apple call options on January 19 2018 with expiration one year in the future.  The following chart shows the results:
+
+<<fig=T, echo=FALSE>>=
+baseUrl='~/Documents/Code/cpp/FFTOptionPricing/'
+appleData=read.csv(paste0(baseUrl, "ActualDataSpline", ".csv"))
+splineData=read.csv(paste0(baseUrl, "RealDataSpline", ".csv"))
+
+plot(splineData$strike, splineData$price, type='l', col='blue')
+points(appleData$strike, appleData$price)
+
+@
+
+\subsection{Numerical Integration Error}
+
+\subsubsection{Black Scholes}
+The numerical integration error can be seen as follows:
+
+<<fig=T, echo=FALSE>>=
+bsU="BlackScholesU"
+integration=read.csv(paste0(baseUrl, bsU, globalIntegration, ".csv"))
+plotIntegration(integration, "Real")
+
+@
+
+<<fig=T, echo=FALSE>>=
+plotIntegration(integration, "Im")
+
+@
+
+
+While in theory the integration should be valid over all real numbers, it appears that it is only accurate from \((-2\pi,\,2\pi)\).  However, since the function is even, we don't benefit from using all the domain and truncate it from \((0, 2 \pi)\).
+
+\subsubsection{Heston}
+
+The following plot shows the integration comparison for a Heston model.
+
+<<fig=T, echo=FALSE>>=
+
+integrationHeston=read.csv(paste0(baseUrl, heston, globalIntegration, ".csv"))
+plotIntegration(integrationHeston, "Real")
+
+@
+
+<<fig=T, echo=FALSE>>=
+plotIntegration(integrationHeston, "Im")
+@
+
+The model shows very good alignment.
+
+\subsubsection{CGMY}
+
+The CGMY process does not have the same accuracy as diffusion and jump-diffusion processes.
+
+<<fig=T, echo=FALSE>>=
+integrationCGMY=read.csv(paste0(baseUrl, cgmy, globalIntegration, ".csv"))
+plotIntegration(integrationCGMY, "Real")
+
+@
+
+<<fig=T, echo=FALSE>>=
+plotIntegration(integrationCGMY, "Im")
+@
+
+This inaccuracy is why we restrict our model to Levy processes with finite variation.  
+
+\subsubsection{Merton}
+
+<<fig=T, echo=FALSE>>=
+integrationMerton=read.csv(paste0(baseUrl, merton, globalIntegration, ".csv"))
+plotIntegration(integrationMerton, "Real")
+
+@
+
+<<fig=T, echo=FALSE>>=
+plotIntegration(integrationMerton, "Im")
+@
+
+\subsection{Estimates}
+
+\subsubsection{Black Scholes}
+Estimating the characteristic function at points \(u\) between negative and positive \(2\pi\), we use a Cuckoo algorithm to minimize the sum of the norms of the differences between the estimated and modeled characteristic functions.  For a simple model like Black Scholes we can also use gradient descent, however for more complicated models the output has many local minima.  
+
+<<echo=FALSE>>=
+bsParameter=read.csv(paste0(baseUrl, bs, globalParameters, ".csv"), header=T)
+bsParameter
+@
+
+\subsubsection{Heston}
+
+For more complicated models with many local minima, we use the cuckoo search. The search for a Heston model shows the following results:
+
+<<echo=FALSE>>=
+hestonParameter=read.csv(paste0(baseUrl, heston, globalParameters, ".csv"), header=T)
+hestonParameter
+@
+
+
+\subsubsection{Merton Jump Diffusion}
+
+Again, we use the cuckoo search. The search shows the following results:
+
+<<echo=FALSE>>=
+mertonParameter=read.csv(paste0(baseUrl, merton, globalParameters, ".csv"), header=T)
+mertonParameter
+@
+
+
+\section{Real Data}
+
+\subsection{Heston}
+
+The parameters for the Apple data for Heston is the following:
+
+<<echo=FALSE>>=
+HestonRealParameters=read.csv(paste0(baseUrl, "HestonRealParameters.csv"), header=T)
+HestonRealParameters
+@
+
+The MSE is the following:
+
+<<echo=FALSE>>=
+HestonRealMSE=read.csv(paste0(baseUrl, "HestonMSE.csv"), header=T)
+HestonRealMSE
+@
+
+The parameters are intuitive.
+
+\subsection{CGMY}
+
+The parameters for the Apple data for CGMY is the following:
+
+<<echo=FALSE>>=
+CGMYRealParameters=read.csv(paste0(baseUrl, "CGMYRealParameters.csv"), header=T)
+CGMYRealParameters
+@
+
+The MSE is the following:
+
+<<echo=FALSE>>=
+CGMYMSE=read.csv(paste0(baseUrl, "CGMYMSE.csv"), header=T)
+CGMYMSE
+@
+
+\subsection{CGMY with time change}
+
+<<echo=FALSE>>=
+CGMYTimeChangeRealParameters=read.csv(paste0(baseUrl, "CGMYTimeChangeRealParameters.csv"), header=T)
+CGMYTimeChangeRealParameters
+@
+The MSE is the following:
+
+<<echo=FALSE>>=
+CGMYTimeChangeMSE=read.csv(paste0(baseUrl, "CGMYTimeChangeMSE.csv"), header=T)
+CGMYTimeChangeMSE
+@
+
+The parameters are not as intuitive as for Heston.
+
+\subsection{Jump Diffusion with time change}
+<<echo=FALSE>>=
+MertonTimeChangeRealParameters=read.csv(paste0(baseUrl, "MertonTimeChangeRealParameters.csv"), header=T)
+MertonTimeChangeRealParameters
+@
+The MSE is the following:
+
+<<echo=FALSE>>=
+MertonTimeChangeMSE=read.csv(paste0(baseUrl, "MertonTimeChangeMSE.csv"), header=T)
+MertonTimeChangeMSE
+@
+
+\end{document}
