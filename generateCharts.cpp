@@ -80,7 +80,7 @@ void printResults(
 
     std::ofstream splineFileCall;
 
-    splineFileCall.open(nameToWrite+"Spline.csv");
+    splineFileCall.open("./docs/calibration/"+nameToWrite+"Spline.csv");
 
     splineFileCall<<"strike, price, actual"<<std::endl;
     for(int i=0; i<m;++i){
@@ -97,7 +97,7 @@ void printResults(
     auto phis=estimateOfPhi(N, uArray);
     std::ofstream numericIntegration;
     std::ofstream optimalParameters;
-    numericIntegration.open(nameToWrite+"Integration.csv");
+    numericIntegration.open("./docs/calibration/"+nameToWrite+"Integration.csv");
     numericIntegration<<"u, estimateReal, estimateIm, exactReal, exactIm"<<std::endl;
     for(int i=0; i<phis.size(); ++i){ 
         const auto u=uArray[i];
@@ -118,7 +118,7 @@ void printResults(
     auto params=std::get<cuckoo::optparms>(results);
     auto objFnRes=std::get<cuckoo::fnval>(results);
 
-    optimalParameters.open(nameToWrite+"Parameters.csv");
+    optimalParameters.open("./docs/calibration/"+nameToWrite+"Parameters.csv");
     optimalParameters<<"paramater, actual, optimal"<<std::endl;
     int numParameters=constraints.size();
     for(int i=0; i<numParameters;++i){
@@ -337,7 +337,7 @@ TEST_CASE("Test spline for actual data", "[OptionCalibration]"){
     auto valOrZero=[](const auto& v){
         return v>0.0?v:0.0;
     };
-    splineActualData.open("ActualDataSpline.csv");
+    splineActualData.open("./docs/calibration/ActualDataSpline.csv");
     splineActualData<<"strike, price"<<std::endl;
     for(int i=0; i<strikes.size();++i){
         double offset=1-strikes[i]*discount/stock;
@@ -345,7 +345,7 @@ TEST_CASE("Test spline for actual data", "[OptionCalibration]"){
     }
     splineActualData.close();
 
-    splineRealData.open("RealDataSpline.csv");
+    splineRealData.open("./docs/calibration/RealDataSpline.csv");
     splineRealData<<"strike, price"<<std::endl;
     int m=256;
     
@@ -427,7 +427,7 @@ TEST_CASE("Heston on actual data", "[OptionCalibration]"){
     auto params=std::get<cuckoo::optparms>(results);
     auto objFnRes=std::get<cuckoo::fnval>(results);
 
-    optimalParameters.open("HestonRealParameters.csv");
+    optimalParameters.open("./docs/calibration/HestonRealParameters.csv");
     optimalParameters<<"paramater, estimate "<<std::endl;
     int numParameters=constraints.size();
     for(int i=0; i<numParameters;++i){
@@ -435,7 +435,7 @@ TEST_CASE("Heston on actual data", "[OptionCalibration]"){
     }
     optimalParameters.close();
 
-    optimalValue.open("HestonMSE.csv");
+    optimalValue.open("./docs/calibration/HestonMSE.csv");
     optimalValue<<"value"<<std::endl;
     optimalValue<<objFnRes<<std::endl;
     optimalValue.close();
@@ -498,7 +498,7 @@ TEST_CASE("CGMY on actual data", "[OptionCalibration]"){
     auto params=std::get<cuckoo::optparms>(results);
     auto objFnRes=std::get<cuckoo::fnval>(results);
 
-    optimalParameters.open("CGMYRealParameters.csv");
+    optimalParameters.open("./docs/calibration/CGMYRealParameters.csv");
     optimalParameters<<"paramater, estimate "<<std::endl;
     int numParameters=constraints.size();
     for(int i=0; i<numParameters;++i){
@@ -506,7 +506,7 @@ TEST_CASE("CGMY on actual data", "[OptionCalibration]"){
     }
     optimalParameters.close();
 
-    optimalValue.open("CGMYMSE.csv");
+    optimalValue.open("./docs/calibration/CGMYMSE.csv");
     optimalValue<<"value"<<std::endl;
     optimalValue<<objFnRes<<std::endl;
     optimalValue.close();
@@ -584,7 +584,7 @@ TEST_CASE("Time changed CGMY on actual data", "[OptionCalibration]"){
     auto params=std::get<cuckoo::optparms>(results);
     auto objFnRes=std::get<cuckoo::fnval>(results);
 
-    optimalParameters.open("CGMYTimeChangeRealParameters.csv");
+    optimalParameters.open("./docs/calibration/CGMYTimeChangeRealParameters.csv");
     optimalParameters<<"paramater, estimate "<<std::endl;
     int numParameters=constraints.size();
     for(int i=0; i<numParameters;++i){
@@ -592,7 +592,7 @@ TEST_CASE("Time changed CGMY on actual data", "[OptionCalibration]"){
     }
     optimalParameters.close();
 
-    optimalValue.open("CGMYTimeChangeMSE.csv");
+    optimalValue.open("./docs/calibration/CGMYTimeChangeMSE.csv");
     optimalValue<<"value"<<std::endl;
     optimalValue<<objFnRes<<std::endl;
     optimalValue.close();
@@ -672,7 +672,7 @@ TEST_CASE("Time changed Merton", "[OptionCalibration]"){
     auto params=std::get<cuckoo::optparms>(results);
     auto objFnRes=std::get<cuckoo::fnval>(results);
 
-    optimalParameters.open("MertonTimeChangeRealParameters.csv");
+    optimalParameters.open("./docs/calibration/MertonTimeChangeRealParameters.csv");
     optimalParameters<<"paramater, estimate "<<std::endl;
     int numParameters=constraints.size();
     for(int i=0; i<numParameters;++i){
@@ -680,7 +680,7 @@ TEST_CASE("Time changed Merton", "[OptionCalibration]"){
     }
     optimalParameters.close();
 
-    optimalValue.open("MertonTimeChangeMSE.csv");
+    optimalValue.open("./docs/calibration/MertonTimeChangeMSE.csv");
     optimalValue<<"value"<<std::endl;
     optimalValue<<objFnRes<<std::endl;
     optimalValue.close();
