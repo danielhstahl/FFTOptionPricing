@@ -4,3 +4,11 @@ optionPricing.o
 test
 optionPricing
 error.log
+*.gcda
+*.gcno
+*.csv
+
+*0**.pdf
+generateCharts
+*.gz
+*.log

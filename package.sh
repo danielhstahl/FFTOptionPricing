@@ -1,6 +1,6 @@
 #!/bin/bash
 git pull origin master
-git checkout 0445848a3306152a6f97b3472ad6721e009385e7
+git checkout b346f6968b36d0837e9b3bb1740b5d7a1d4854b3
 function cloneAndCheckout {
 	cd ..
 	if [ -d "$1" ]; then
@@ -13,11 +13,25 @@ function cloneAndCheckout {
 
 	git checkout $2
 	cd ..
+	cd FFTOptionPricing
 }
 
-cloneAndCheckout CharacteristicFunctions 59d5f2e1789bdcfc8d861645ef3d6392de79832f
+cloneAndCheckout FunctionalUtilities 20bb2555ccb00539496860bf598eb466d348c043
 
-cloneAndCheckout FangOost d74b4e541aa5569ccd99192fe3d256e7d23b3883
+cloneAndCheckout CharacteristicFunctions 0dfefb3dc845d40ae94b70edb23cf6301bd6df18
 
-cloneAndCheckout RungeKutta b286ce51f5e6957a59a5a49a3d1c60abdd765af4
+cloneAndCheckout FangOost 5919d52d5a59b317878b61115acd6cda3a91b97f
 
+cloneAndCheckout RungeKutta 6326974b245199852a1f00fccb4b677180ffc6d4
+cloneAndCheckout GaussNewton
+cloneAndCheckout TupleUtilities
+cloneAndCheckout AutoDiff
+
+cd ..
+git clone https://github.com/kthohr/optim ./optim
+# build and install
+cd ./optim
+./configure -p -d
+make
+cd ..
+cd FFTOptionPricing
