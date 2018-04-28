@@ -20,6 +20,6 @@ generateCharts.o: generateCharts.cpp fft.h fft.hpp OptionPricing.h OptionCalibra
 	$(GCCVAL) -std=c++14 -O3 -D VERBOSE_FLAG=1 -pthread --coverage -c generateCharts.cpp  $(INCLUDES) -fopenmp
 
 clean:
-	-rm *.o test *.csv
+	-rm *.o test *.csv *.pdf
 
 
