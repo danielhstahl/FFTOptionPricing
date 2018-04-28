@@ -1066,6 +1066,68 @@ TEST_CASE("FangOostHeston", "[OptionPricing]"){
     std::cout<<myOptionsPrice[1]<<std::endl;
     REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
 }
+TEST_CASE("FangOostHestonSubsetMerton", "[OptionPricing]"){
+    /**note that the only difference between this and the other Heston calculations is
+    that I'm using Merton's CF*/
+    //heston parameters
+    double b=.0398;
+    double a=1.5768;
+    double c=.5751;
+    double rho=-.5711;
+    double v0=.0175;
+    auto r=0.0;
+    //convert to extended CGMY
+    auto sig=sqrt(b);
+    auto speed=a;
+    auto T=1.0;
+    auto S0=100.0;  
+    auto kappa=speed;//long run tau of 1
+    auto v0Hat=v0/b;
+    auto adaV=c/sqrt(b);
+    /**const T& u, const Number& lambda, const Number& muL, const Number& sigL, const Number& r,  const Number& sigma*/
+    auto CFCorr=[&](const auto& u){
+        return exp(r*T*u+chfunctions::cirLogMGF(
+            -chfunctions::mertonLogRNCF(u, 0.0, 1.0, 1.0, 0.0, sig),
+            speed, 
+            kappa-adaV*rho*u*sig,
+            adaV,
+            T, 
+            v0Hat
+        ));
+    };
+    std::vector<double> KArray(3);
+    KArray[2]=.3;
+    KArray[1]=100;
+    KArray[0]=5000;
+    int numU=256; //this is high...this seems to be a computationally tricky problem
+    auto myOptionsPrice=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, CFCorr);
+    auto myReference= 5.78515545;
+    std::cout<<myOptionsPrice[1]<<std::endl;
+    REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
+}
+//https://www.upo.es/personal/jfernav/papers/Jumps_JOD_.pdf pg 8
+TEST_CASE("FangOostMerton", "[OptionPricing]"){
+    //merton parameters
+    double r=.1;
+    double lambda=1;
+    double sigmaL=sqrt(.05);
+    double sigma=sigmaL;
+    double mu=-sigmaL*sigmaL*.5;
+    double S0=38;
+    double T=.5;
+    auto CFCorr=[&](const auto& u){
+        return exp(chfunctions::mertonLogRNCF(u, lambda, mu, sigmaL, r, sigma)*T);
+    };
+    std::vector<double> KArray(3);
+    KArray[2]=.3;
+    KArray[1]=35;
+    KArray[0]=5000;
+    int numU=256; //
+    auto myOptionsPrice=optionprice::FangOostCallPrice(S0, KArray, r, T, numU, CFCorr);
+    auto myReference= 5.9713;
+    std::cout<<myOptionsPrice[1]<<std::endl;
+    REQUIRE(myOptionsPrice[1]==Approx(myReference).epsilon(.0001));
+}
 
 TEST_CASE("FSTSHeston", "[OptionPricing]"){
     //heston parameters
@@ -1116,6 +1178,8 @@ TEST_CASE("FSTSHeston", "[OptionPricing]"){
     std::cout<<myOptionsPrice[numX/2]<<std::endl;
     REQUIRE(myOptionsPrice[numX/2]==Approx(myReference).epsilon(.001));
 }
+
+
 
 TEST_CASE("FangOostDegenerateBS", "[OptionPricing]"){
     auto sig=.3;
