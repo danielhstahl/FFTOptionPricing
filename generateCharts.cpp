@@ -10,6 +10,11 @@
 #include "CharacteristicFunctions.h"
 #include "cuckoo.h"
 #include "OptionCalibration.h"
+
+
+const auto numSims=500;
+const auto nestSize=100;
+
 template<typename CF>
 void printResults(
     const std::string& nameToWrite,  
@@ -112,8 +117,8 @@ void printResults(
         std::move(uArray)
     );
    
-
-    const auto results=cuckoo::optimize(objFn, constraints, 25, 500, 42);
+   
+    const auto results=cuckoo::optimize(objFn, constraints, nestSize, numSims, 42);
 
     auto params=std::get<cuckoo::optparms>(results);
     auto objFnRes=std::get<cuckoo::fnval>(results);
@@ -172,9 +177,11 @@ TEST_CASE("Test BS Large U", "[OptionCalibration]"){
     std::vector<double> uArray={-20, -15, -10, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 10, 15, 20};
     printResults("BlackScholesU", std::move(cf), strikes, objParams, constraints, paramNames, r, T, stock, 3.0, std::move(uArray));
 }
+
+
 TEST_CASE("Test BS", "[OptionCalibration]"){
     double stock=10.0;
-    double r=0;
+    double r=.05;
     double sigma=.3;
     double T=1.0;
     std::vector<cuckoo::upper_lower<double>> constraints={
@@ -191,6 +198,7 @@ TEST_CASE("Test BS", "[OptionCalibration]"){
     std::vector<double> objParams={sigma};
     printResults("BlackScholes", std::move(cf), strikes, objParams, constraints, paramNames, r, T, stock, 3.0);
 }
+
 TEST_CASE("Test Heston", "[OptionCalibration]"){
     double r=0;
     double T=1.0;
@@ -285,7 +293,7 @@ TEST_CASE("Test Merton", "[OptionCalibration]"){
     auto sig=0.2;
     auto T=.25;
     auto S0=178.0;  
-    auto lambda=.05;
+    auto lambda=.5;
     auto muJ=.05;
     auto sigJ=.05;
     double discount=exp(-r*T);
@@ -310,7 +318,7 @@ TEST_CASE("Test Merton", "[OptionCalibration]"){
     };
     std::vector<cuckoo::upper_lower<double>> constraints={
         cuckoo::upper_lower<double>(0.0, .6),
-        cuckoo::upper_lower<double>(0.0, .5),
+        cuckoo::upper_lower<double>(0.0, 2.0),
         cuckoo::upper_lower<double>(0.0, 1.5),
         cuckoo::upper_lower<double>(0.0, 1.5)
     };
@@ -422,7 +430,7 @@ TEST_CASE("Heston on actual data", "[OptionCalibration]"){
         std::move(uArray)
     );
 
-    const auto results=cuckoo::optimize(objFn, constraints, 25, 500, 42);
+    const auto results=cuckoo::optimize(objFn, constraints, nestSize, numSims, 42);
 
     auto params=std::get<cuckoo::optparms>(results);
     auto objFnRes=std::get<cuckoo::fnval>(results);
@@ -493,7 +501,7 @@ TEST_CASE("CGMY on actual data", "[OptionCalibration]"){
         std::move(uArray)
     );
 
-    const auto results=cuckoo::optimize(objFn, constraints, 25, 500, 42);
+    const auto results=cuckoo::optimize(objFn, constraints, nestSize, numSims, 42);
 
     auto params=std::get<cuckoo::optparms>(results);
     auto objFnRes=std::get<cuckoo::fnval>(results);
@@ -579,7 +587,7 @@ TEST_CASE("Time changed CGMY on actual data", "[OptionCalibration]"){
         std::move(uArray)
     );
 
-    const auto results=cuckoo::optimize(objFn, constraints, 25, 500, 42);
+    const auto results=cuckoo::optimize(objFn, constraints, nestSize, numSims, 42);
 
     auto params=std::get<cuckoo::optparms>(results);
     auto objFnRes=std::get<cuckoo::fnval>(results);
@@ -667,7 +675,7 @@ TEST_CASE("Time changed Merton", "[OptionCalibration]"){
         std::move(uArray)
     );
 
-    const auto results=cuckoo::optimize(objFn, constraints, 25, 500, 42);
+    const auto results=cuckoo::optimize(objFn, constraints, nestSize, numSims, 42);
 
     auto params=std::get<cuckoo::optparms>(results);
     auto objFnRes=std::get<cuckoo::fnval>(results);

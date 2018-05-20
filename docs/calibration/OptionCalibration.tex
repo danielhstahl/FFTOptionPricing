@@ -69,6 +69,7 @@ This model shows very good alignment when choosing a spline on the log of the op
 
 \includegraphics{OptionCalibration-002}
 
+
 \subsubsection{Heston}
 
 We then fit the spline for a Heston model.  The parameters chosen are the strike array \((95,100,130,150,160,165,170,175,185,190,195,200,210,240,250)\).
@@ -102,6 +103,8 @@ The numerical integration error can be seen as follows:
 \includegraphics{OptionCalibration-007}
 
 \includegraphics{OptionCalibration-008}
+
+
 
 
 While in theory the integration should be valid over all real numbers, it appears that it is only accurate from \((-2\pi,\,2\pi)\).  However, since the function is even, we don't benefit from using all the domain and truncate it from \((0, 2 \pi)\).
@@ -140,7 +143,7 @@ Estimating the characteristic function at points \(u\) between negative and posi
 \begin{Schunk}
 \begin{Soutput}
   paramater actual  optimal
-1     sigma    0.3 0.298548
+1     sigma    0.3 0.299081
 \end{Soutput}
 \end{Schunk}
 
@@ -151,11 +154,11 @@ For more complicated models with many local minima, we use the cuckoo search. Th
 \begin{Schunk}
 \begin{Soutput}
   paramater    actual   optimal
-1     sigma  0.199499  0.151765
-2     speed  1.576800  1.560200
-3      adaV  2.882720  3.297590
-4       rho -0.571100 -0.556332
-5     v0Hat  0.439698  1.442310
+1     sigma  0.199499  0.218818
+2     speed  1.576800  0.940772
+3      adaV  2.882720  2.060680
+4       rho -0.571100 -0.587684
+5     v0Hat  0.439698  0.356806
 \end{Soutput}
 \end{Schunk}
 
@@ -166,11 +169,11 @@ Again, we use the cuckoo search. The search shows the following results:
 
 \begin{Schunk}
 \begin{Soutput}
-  paramater actual  optimal
-1       sig   0.20 0.200169
-2    lambda   0.05 0.000000
-3       muJ   0.05 1.197670
-4      sigJ   0.05 0.100525
+  paramater actual   optimal
+1       sig   0.20 0.2022780
+2    lambda   0.50 0.2594070
+3       muJ   0.05 0.0467802
+4      sigJ   0.05 0.0619793
 \end{Soutput}
 \end{Schunk}
 
@@ -184,11 +187,11 @@ The parameters for the Apple data for Heston is the following:
 \begin{Schunk}
 \begin{Soutput}
   paramater  estimate
-1     sigma  0.282993
-2     speed  1.866580
-3      adaV  2.023650
-4       rho -0.201012
-5     v0Hat  0.469604
+1     sigma  0.271336
+2     speed  1.992170
+3      adaV  2.105990
+4       rho -0.197393
+5     v0Hat  0.598115
 \end{Soutput}
 \end{Schunk}
 
@@ -197,7 +200,7 @@ The MSE is the following:
 \begin{Schunk}
 \begin{Soutput}
         value
-1 9.49658e-05
+1 8.80805e-05
 \end{Soutput}
 \end{Schunk}
 
@@ -210,11 +213,11 @@ The parameters for the Apple data for CGMY is the following:
 \begin{Schunk}
 \begin{Soutput}
   paramater  estimate
-1       sig  0.214194
-2         C  1.946660
-3         G  4.839920
-4         M  8.954330
-5         Y -2.510280
+1       sig  0.206765
+2         C  1.597610
+3         G  4.319840
+4         M  7.034340
+5         Y -2.120280
 \end{Soutput}
 \end{Schunk}
 
@@ -222,8 +225,8 @@ The MSE is the following:
 
 \begin{Schunk}
 \begin{Soutput}
-        value
-1 8.31885e-05
+       value
+1 4.4292e-05
 \end{Soutput}
 \end{Schunk}
 
@@ -231,24 +234,24 @@ The MSE is the following:
 
 \begin{Schunk}
 \begin{Soutput}
-  paramater  estimate
-1       sig  0.242650
-2         C  1.329590
-3         G  4.500060
-4         M  7.640460
-5         Y -2.845140
-6     speed  1.658710
-7      adaV  1.558930
-8       rho -0.122374
-9        v0  0.808854
+  paramater   estimate
+1       sig  0.2295370
+2         C  1.6705700
+3         G  4.4208500
+4         M  7.2624600
+5         Y -1.4110200
+6     speed  1.3114700
+7      adaV  0.1441410
+8       rho -0.0917749
+9        v0  0.5813290
 \end{Soutput}
 \end{Schunk}
 The MSE is the following:
 
 \begin{Schunk}
 \begin{Soutput}
-       value
-1 5.7709e-05
+        value
+1 5.51435e-05
 \end{Soutput}
 \end{Schunk}
 
@@ -257,23 +260,23 @@ The parameters are not as intuitive as for Heston.
 \subsection{Jump Diffusion with time change}
 \begin{Schunk}
 \begin{Soutput}
-  paramater     estimate
-1       sig  0.214899000
-2    lambda  0.000954456
-3       muJ  0.479447000
-4      sigJ  0.098922200
-5     speed  1.168860000
-6      adaV  2.179230000
-7       rho -0.200476000
-8        v0  1.611840000
+  paramater  estimate
+1       sig  0.211936
+2    lambda  0.000000
+3       muJ  0.241638
+4      sigJ  0.870253
+5     speed  1.834870
+6      adaV  2.406350
+7       rho -0.183790
+8        v0  1.783190
 \end{Soutput}
 \end{Schunk}
 The MSE is the following:
 
 \begin{Schunk}
 \begin{Soutput}
-       value
-1 0.00012436
+        value
+1 9.28195e-05
 \end{Soutput}
 \end{Schunk}
 
