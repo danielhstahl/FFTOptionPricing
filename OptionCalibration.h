@@ -38,7 +38,7 @@ namespace optioncal{
     auto getUMax(int N, double xMin, double xMax){
         return M_PI*(N-1)/(xMax-xMin);
     }
-    
+    //int_-xmin ^ xmax e^{uix} f(x)dx
     template<typename ArrayU, typename Fn, typename ApplyEachSum, typename T>
     auto DFT(const std::vector<ArrayU>& uArray, Fn&& fn, ApplyEachSum&& fnU, const T& xMin, const T& xMax, int N){
         T dx=(xMax-xMin)/(N-1);
@@ -104,16 +104,16 @@ namespace optioncal{
 
     template< typename Strike, typename MarketPrice, typename AssetPrice, typename Discount>
     auto getOptionSpline(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options,  const AssetPrice& stock, const Discount& discount, const Strike& minStrike, const Strike& maxStrike){
-        auto paddedStrikes=transformPrices(strikes, stock, minStrike, maxStrike);
+        const auto paddedStrikes=transformPrices(strikes, stock, minStrike, maxStrike);
         const auto minOption=stock-minStrike*discount;
         const auto maxOption=0.0000001;
         
-        auto optionPrices=transformPrices(options, stock, minOption, maxOption);
+        const auto optionPrices=transformPrices(options, stock, minOption, maxOption);
         
         const auto thresholdIndex=getKThatIsBelowOne(paddedStrikes);
-        auto threshold=(paddedStrikes[thresholdIndex]+paddedStrikes[thresholdIndex-1])*.5;//average
-        
-        auto thresholdCondition=[threshold=std::move(threshold)](const auto& x){
+        auto thresholdCondition=[
+            threshold=(paddedStrikes[thresholdIndex]+paddedStrikes[thresholdIndex-1])*.5//average
+        ](const auto& x){
             return x<threshold;
         };
 
@@ -154,14 +154,11 @@ namespace optioncal{
         };
         
     }
-
-
     template<typename Strike, typename MarketPrice, typename AssetPrice, typename R, typename T>
     auto generateFOEstimate(const std::vector<Strike>& strikes, const std::vector<MarketPrice>& options,  const AssetPrice& stock, const R& r, const T& t, const Strike& minStrike, const Strike& maxStrike){
         auto discount=exp(-r*t);
-        auto s=getOptionSpline(strikes, options, stock, discount, minStrike, maxStrike);
         return [
-            spline=std::move(s), 
+            spline=getOptionSpline(strikes, options, stock, discount, minStrike, maxStrike), 
             minStrike=transformPrice(minStrike, stock), 
             maxStrike=transformPrice(maxStrike, stock),
             discount=std::move(discount),
@@ -185,19 +182,19 @@ namespace optioncal{
         };   
 
     }
-    
+
     template<typename PhiHat, typename LogCfFN, typename DiscreteU>
     auto getObjFn_arr(PhiHat&& phiHattmp, LogCfFN&& cfFntmp, DiscreteU&& uArraytmp){
         return [
             phiHat=std::move(phiHattmp), 
             cfFn=std::move(cfFntmp), 
             uArray=std::move(uArraytmp)
-        ](const auto& arrayParam){
+        ](const auto&... param){
             return futilities::sum(uArray, [&](const auto& u, const auto& index){
                 return std::norm(
-                    phiHat[index]-cfFn(std::complex<double>(1.0, u), arrayParam)
-                )/(double)uArray.size();         
-            });
+                    phiHat[index]-cfFn(std::complex<double>(1.0, u), param...)
+                );         
+            })/(double)uArray.size();
         };
     }
 

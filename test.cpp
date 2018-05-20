@@ -8,7 +8,7 @@
 #include <deque>
 #include <iostream>
 #include "CharacteristicFunctions.h"
-#include "cuckoo.h"
+
 #include "OptionCalibration.h"
 double BSCall(double S0, double discount, double k, double sigma, double T){
     double s=sqrt(2.0);
@@ -1260,6 +1260,38 @@ TEST_CASE("getObjfn_arr", "[OptionCalibration]"){
     double tmp=0;
     REQUIRE(hoc(tmp)==expected);
 
+}
+
+TEST_CASE("getObjfn_arr multiple parameters", "[OptionCalibration]"){
+    std::vector<std::complex<double> > arr={
+        std::complex<double>(3, 0), 
+        std::complex<double>(4, 0), 
+        std::complex<double>(5, 0)
+    };
+    std::vector<double> u={6, 7, 8};
+    auto cf=[](const auto& cmpU, const auto& v1, const auto& v2){
+        return std::complex<double>(cmpU.imag(), 0.0);
+    };
+    auto hoc=optioncal::getObjFn_arr(std::move(arr), std::move(cf), std::move(u));
+    double expected=9;//3*3^2/3
+    double tmp1=0;
+    double tmp2=0;
+    REQUIRE(hoc(tmp1, tmp2)==expected);
+}
+TEST_CASE("getObjfn_arr vector parameter", "[OptionCalibration]"){
+    std::vector<std::complex<double> > arr={
+        std::complex<double>(3, 0), 
+        std::complex<double>(4, 0), 
+        std::complex<double>(5, 0)
+    };
+    std::vector<double> u={6, 7, 8};
+    auto cf=[](const auto& cmpU, const auto& v1){
+        return std::complex<double>(cmpU.imag(), 0.0);
+    };
+    auto hoc=optioncal::getObjFn_arr(std::move(arr), std::move(cf), std::move(u));
+    double expected=9;//3*3^2/3
+    std::vector<double> tmp1={3, 4, 5};
+    REQUIRE(hoc(tmp1)==expected);
 }
 TEST_CASE("getKThatIsBelowOne with exactly 1", "[OptionCalibration]"){
     std::vector<double> arr={.8, .9, 1, 1.1, 1.2};
