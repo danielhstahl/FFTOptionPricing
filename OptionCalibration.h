@@ -109,7 +109,6 @@ namespace optioncal{
         const auto maxOption=0.0000001;
         
         const auto optionPrices=transformPrices(options, stock, minOption, maxOption);
-        
         const auto thresholdIndex=getKThatIsBelowOne(paddedStrikes);
         auto thresholdCondition=[
             threshold=(paddedStrikes[thresholdIndex]+paddedStrikes[thresholdIndex-1])*.5//average
@@ -124,7 +123,8 @@ namespace optioncal{
             }, 
             [&](const auto& k, const auto& i){
                 return k;
-            }, [&](const auto& k, const auto& i){
+            }, 
+            [&](const auto& k, const auto& i){
                 return k;
             }
         );

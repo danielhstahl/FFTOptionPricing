@@ -89,20 +89,26 @@ We then fit the spline for a Merton jump diffusion model.
 
 \includegraphics{OptionCalibration-005}
 
+\subsubsection{Merton Volatility Jumps}
+
+We then fit the spline for a Merton jump diffusion model with stochastic volatility with jumps.
+
+\includegraphics{OptionCalibration-006}
+
 \subsubsection{Actual Call prices}
 
 We use Apple call options on January 19 2018 with expiration one year in the future.  The following chart shows the results:
 
-\includegraphics{OptionCalibration-006}
+\includegraphics{OptionCalibration-007}
 
 \subsection{Numerical Integration Error}
 
 \subsubsection{Black Scholes}
 The numerical integration error can be seen as follows:
 
-\includegraphics{OptionCalibration-007}
-
 \includegraphics{OptionCalibration-008}
+
+\includegraphics{OptionCalibration-009}
 
 
 
@@ -113,27 +119,34 @@ While in theory the integration should be valid over all real numbers, it appear
 
 The following plot shows the integration comparison for a Heston model.
 
-\includegraphics{OptionCalibration-009}
-
 \includegraphics{OptionCalibration-010}
 
+\includegraphics{OptionCalibration-011}
+
 The model shows very good alignment.
+
 
 \subsubsection{CGMY}
 
 The CGMY process does not have the same accuracy as diffusion and jump-diffusion processes.
 
-\includegraphics{OptionCalibration-011}
-
 \includegraphics{OptionCalibration-012}
+
+\includegraphics{OptionCalibration-013}
 
 This inaccuracy is why we restrict our model to Levy processes with finite variation.  
 
 \subsubsection{Merton}
 
-\includegraphics{OptionCalibration-013}
-
 \includegraphics{OptionCalibration-014}
+
+\includegraphics{OptionCalibration-015}
+
+
+\subsubsection{Merton with Time Changed Volatility}
+\includegraphics{OptionCalibration-016}
+
+\includegraphics{OptionCalibration-017}
 
 \subsection{Estimates}
 
@@ -143,7 +156,7 @@ Estimating the characteristic function at points \(u\) between negative and posi
 \begin{Schunk}
 \begin{Soutput}
   paramater actual  optimal
-1     sigma    0.3 0.299074
+1     sigma    0.3 0.299059
 \end{Soutput}
 \end{Schunk}
 
@@ -154,11 +167,11 @@ For more complicated models with many local minima, we use the cuckoo search. Th
 \begin{Schunk}
 \begin{Soutput}
   paramater    actual   optimal
-1     sigma  0.199499  0.203126
-2     speed  1.576800  1.122030
-3      adaV  2.882720  2.197070
-4       rho -0.571100 -0.601677
-5     v0Hat  0.439698  0.450856
+1     sigma  0.199499  0.231476
+2     speed  1.576800  0.943329
+3      adaV  2.882720  1.982890
+4       rho -0.571100 -0.599365
+5     v0Hat  0.439698  0.259959
 \end{Soutput}
 \end{Schunk}
 
@@ -169,14 +182,32 @@ Again, we use the cuckoo search. The search shows the following results:
 
 \begin{Schunk}
 \begin{Soutput}
-  paramater actual  optimal
-1       sig   0.20 0.205991
-2    lambda   0.50 0.000000
-3       muJ   0.05 0.962648
-4      sigJ   0.05 0.111870
+  paramater actual   optimal
+1       sig   0.20 0.2068510
+2    lambda   0.50 0.0000000
+3       muJ   0.05 0.0685729
+4      sigJ   0.05 1.3695800
 \end{Soutput}
 \end{Schunk}
 
+\subsubsection{Merton Jump Diffusion with Stochastic vol}
+
+Again, we use the cuckoo search. The search shows the following results:
+
+\begin{Schunk}
+\begin{Soutput}
+  paramater actual     optimal
+1    lambda   0.50  0.00943252
+2       muJ  -0.05 -0.19488700
+3      sigJ   0.10  1.01096000
+4     sigma   0.20  0.19277700
+5        v0   0.90  1.16260000
+6     speed   0.30  2.13128000
+7      adaV   0.20  1.41406000
+8       rho  -0.50 -0.30657900
+9     delta   0.20  1.13548000
+\end{Soutput}
+\end{Schunk}
 
 \section{Real Data}
 
@@ -186,12 +217,12 @@ The parameters for the Apple data for Heston is the following:
 
 \begin{Schunk}
 \begin{Soutput}
-  paramater  estimate
-1     sigma  0.246720
-2     speed  1.363110
-3      adaV  1.805910
-4       rho -0.196996
-5     v0Hat  0.988091
+  paramater   estimate
+1     sigma  0.3225870
+2     speed  1.8623100
+3      adaV  1.8483600
+4       rho -0.1963840
+5     v0Hat  0.0743235
 \end{Soutput}
 \end{Schunk}
 
@@ -200,7 +231,7 @@ The MSE is the following:
 \begin{Schunk}
 \begin{Soutput}
         value
-1 9.03074e-05
+1 8.73564e-05
 \end{Soutput}
 \end{Schunk}
 
@@ -212,12 +243,12 @@ The parameters for the Apple data for CGMY is the following:
 
 \begin{Schunk}
 \begin{Soutput}
-  paramater estimate
-1       sig 0.524058
-2         C 1.874790
-3         G 6.681070
-4         M 0.455633
-5         Y 1.826610
+  paramater  estimate
+1       sig  0.359487
+2         C  0.634000
+3         G  6.830330
+4         M  0.668240
+5         Y -1.263120
 \end{Soutput}
 \end{Schunk}
 
@@ -234,16 +265,16 @@ The MSE is the following:
 
 \begin{Schunk}
 \begin{Soutput}
-  paramater  estimate
-1       sig  0.202150
-2         C  0.435828
-3         G  8.225480
-4         M  0.265378
-5         Y  0.115928
-6     speed  0.205986
-7      adaV  3.967590
-8       rho -0.547400
-9        v0  1.346390
+  paramater   estimate
+1       sig  0.3097440
+2         C  1.6663800
+3         G 12.4950000
+4         M  0.6565980
+5         Y  0.2987190
+6     speed  1.1438400
+7      adaV  3.1074600
+8       rho -0.0467101
+9        v0  0.3599130
 \end{Soutput}
 \end{Schunk}
 The MSE is the following:
@@ -261,14 +292,14 @@ The parameters are not as intuitive as for Heston.
 \begin{Schunk}
 \begin{Soutput}
   paramater    estimate
-1       sig  0.26695700
+1       sig  0.20683800
 2    lambda  0.00000000
-3       muJ  0.00465588
-4      sigJ  0.67223600
-5     speed  1.51892000
-6      adaV  2.02285000
-7       rho -0.18930300
-8        v0  0.75627500
+3       muJ  0.00736539
+4      sigJ  0.48147000
+5     speed  2.00000000
+6      adaV  2.47854000
+7       rho -0.18924200
+8        v0  1.95441000
 \end{Soutput}
 \end{Schunk}
 The MSE is the following:
@@ -276,7 +307,7 @@ The MSE is the following:
 \begin{Schunk}
 \begin{Soutput}
         value
-1 9.99011e-05
+1 8.85877e-05
 \end{Soutput}
 \end{Schunk}
 

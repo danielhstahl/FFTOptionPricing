@@ -333,16 +333,14 @@ namespace optionprice{
          //x goes from log(S0/kmin) to log(S0/kmax)
         auto xMin=xValues.front();
         auto xMax=xValues.back();
-        return futilities::for_each_parallel(
-            fangoost::computeExpectationVectorLevy(
-                std::move(xValues), numUSteps, 
-                [&](const auto& u){
-                    return enhCF(cf(u), u);
-                }, 
-                [&](const auto& u, const auto& x, const auto& k){
-                    return phiK(xMin, xMax, xMin, 0.0, u, k)-chiK(xMin, xMax, xMin, 0.0, u);//used for put
-                }
-            ), 
+        return fangoost::computeExpectationVectorLevy(
+            std::move(xValues), numUSteps, 
+            [&](const auto& u){
+                return enhCF(cf(u), u);
+            }, 
+            [&](const auto& u, const auto& x, const auto& k){
+                return phiK(xMin, xMax, xMin, 0.0, u, k)-chiK(xMin, xMax, xMin, 0.0, u);//used for put
+            }, 
             std::move(mOutput)
         );
     }
@@ -376,7 +374,7 @@ namespace optionprice{
             [](const auto& cfu, const auto& u){
                 return optionPriceTransform(cfu);
             },
-            [&](const auto& val, const auto& index){
+            [&](auto&& val, const auto& x, const auto& index){
                 return (val-1.0)*discount*K[index]+S0;
             },
             std::move(cf)
@@ -412,7 +410,7 @@ namespace optionprice{
             [](const auto& cfu, const auto& u){
                 return optionPriceTransform(cfu);
             },
-            [&](const auto& val, const auto& index){
+            [&](auto&& val, const auto& x, const auto& index){
                 return val*discount*K[index];
             },
             std::move(cf)
@@ -437,7 +435,7 @@ namespace optionprice{
             [](const auto& cfu, const auto& u){
                 return optionDeltaTransform(cfu, u);
             },
-            [&](const auto& val, const auto& index){
+            [&](auto&& val, const auto& x, const auto& index){
                 return val*discount*K[index]/S0+1.0;
             },
             std::move(cf)
@@ -462,7 +460,7 @@ namespace optionprice{
             [](const auto& cfu, const auto& u){
                 return optionDeltaTransform(cfu, u);
             },
-            [&](const auto& val, const auto& index){
+            [&](auto&& val, const auto& x, const auto& index){
                 return val*discount*K[index]/S0;
             },
             std::move(cf)
@@ -488,7 +486,7 @@ namespace optionprice{
             [&](const auto& cfu, const auto& u){
                 return optionThetaTransform(cfu, u, r);
             },
-            [&](const auto& val, const auto& index){
+            [&](auto&& val, const auto& x, const auto& index){
                 return (val-r)*discount*K[index];
             },
             std::move(cf)
@@ -513,7 +511,7 @@ namespace optionprice{
             [&](const auto& cfu, const auto& u){
                 return optionThetaTransform(cfu, u, r);
             },
-            [&](const auto& val, const auto& index){
+            [&](auto&& val, const auto& x, const auto& index){
                 return val*discount*K[index];
             },
             std::move(cf)
@@ -539,7 +537,7 @@ namespace optionprice{
             [](const auto& cfu, const auto& u){
                 return optionGammaTransform(cfu, u);
             },
-            [&](const auto& val, const auto& index){
+            [&](auto&& val, const auto& x, const auto& index){
                 return val*discount*K[index]/(S0*S0);
             },
             std::move(cf)

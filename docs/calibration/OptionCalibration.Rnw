@@ -126,6 +126,16 @@ k=read.csv(paste0(baseUrl, merton, globalSpline, ".csv"))
 plotSpline(k)
 @
 
+\subsubsection{Merton Volatility Jumps}
+
+We then fit the spline for a Merton jump diffusion model with stochastic volatility with jumps.
+
+<<fig=T, echo=FALSE>>=
+mertonJumps="MertonJumps"
+k=read.csv(paste0(baseUrl, mertonJumps, globalSpline, ".csv"))
+plotSpline(k)
+@
+
 \subsubsection{Actual Call prices}
 
 We use Apple call options on January 19 2018 with expiration one year in the future.  The following chart shows the results:
@@ -178,6 +188,7 @@ plotIntegration(integrationHeston, "Im")
 
 The model shows very good alignment.
 
+
 \subsubsection{CGMY}
 
 The CGMY process does not have the same accuracy as diffusion and jump-diffusion processes.
@@ -198,6 +209,18 @@ This inaccuracy is why we restrict our model to Levy processes with finite varia
 
 <<fig=T, echo=FALSE>>=
 integrationMerton=read.csv(paste0(baseUrl, merton, globalIntegration, ".csv"))
+plotIntegration(integrationMerton, "Real")
+
+@
+
+<<fig=T, echo=FALSE>>=
+plotIntegration(integrationMerton, "Im")
+@
+
+
+\subsubsection{Merton with Time Changed Volatility}
+<<fig=T, echo=FALSE>>=
+integrationMerton=read.csv(paste0(baseUrl, mertonJumps, globalIntegration, ".csv"))
 plotIntegration(integrationMerton, "Real")
 
 @
@@ -235,6 +258,14 @@ mertonParameter=read.csv(paste0(baseUrl, merton, globalParameters, ".csv"), head
 mertonParameter
 @
 
+\subsubsection{Merton Jump Diffusion with Stochastic vol}
+
+Again, we use the cuckoo search. The search shows the following results:
+
+<<echo=FALSE>>=
+mertonParameter=read.csv(paste0(baseUrl, mertonJumps, globalParameters, ".csv"), header=T)
+mertonParameter
+@
 
 \section{Real Data}
 

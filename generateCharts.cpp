@@ -46,7 +46,6 @@ void printResults(
     KArray[0]=stock*50; //endpoints for creating option price
     KArray[n+1]=stock*.03;
     int numU=256;
-
     auto optionPrices=optionprice::FangOostCallPrice(stock, KArray, r, T, numU, [&](const auto& u){
         return exp(r*T*u+cf(u, objParms));
     });
@@ -55,14 +54,11 @@ void printResults(
         std::reverse(std::begin(arrTmp), std::end(arrTmp));
         return arrTmp;
     };
-
     auto observedO=getReducedAndReversed(optionPrices);
     if(observedO.size()!=strikes.size()){
         std::cout<<"SIZE OF OPTIONS (observedO, "<<observedO.size()<<") MUST EQUAL STRIKES (strikes, "<<strikes.size()<<")"<<std::endl;
     }
-   
     auto s=optioncal::getOptionSpline(strikes, observedO, stock, discount, minStrike, maxStrike);
-
     auto valOrZero=[](const auto& v){
         return v>0.0?v:0.0;
     };
@@ -71,7 +67,6 @@ void printResults(
     double maxLogStrike=log(maxStrike/stock);
     int m=256;
     double logdk=(maxLogStrike-minLogStrike)/(double)(m-1);
-
     std::vector<double> dkLogArray(m+2);
     dkLogArray=futilities::for_each_parallel_subset(std::move(dkLogArray), 1, 1, [&](const auto& v, const auto& index){
         return exp(maxLogStrike-(index-1)*logdk);
@@ -82,7 +77,6 @@ void printResults(
     auto optionPricesLogDK=optionprice::FangOostCallPrice(1.0, dkLogArray, r, T, numU, [&](const auto& u){
         return exp(r*T*u+cf(u, objParms));
     });
-
     std::ofstream splineFileCall;
 
     splineFileCall.open("./docs/calibration/"+nameToWrite+"Spline.csv");
@@ -95,8 +89,7 @@ void printResults(
     }
     splineFileCall.close();
     
-    int N=1024;
-    
+    int N=4096;
     const auto estimateOfPhi=optioncal::generateFOEstimate(strikes, observedO, stock, r, T, minStrike, maxStrike);
 
     auto phis=estimateOfPhi(N, uArray);
@@ -116,7 +109,6 @@ void printResults(
         std::move(cf),
         std::move(uArray)
     );
-   
     
     const auto results=cuckoo::optimize(objFn, constraints, nestSize, numSims, tol, 42);
 
@@ -323,6 +315,107 @@ TEST_CASE("Test Merton", "[OptionCalibration]"){
         cuckoo::upper_lower<double>(0.0, 1.5)
     };
     printResults("Merton", std::move(CFBase), strikes, objParms, constraints, paramNames, r, T, S0, 10.0);
+   
+}
+auto cfLogGeneric(
+    double T
+){
+    return [=](
+        double lambda, 
+        double muJ, double sigJ,
+        double sigma, double v0, 
+        double speed, double adaV, 
+        double rho, double delta
+    ){
+
+        auto numODE=64;//hopefully this is sufficient
+        //double speedTmp=speed;//copy here in order to move to move
+        //const T& rho, const T& K, const T& H, const T& l
+        auto alpha=chfunctions::AlphaOrBeta_move(0.0, speed, 0.0, 0.0);
+        return [=, alpha=std::move(alpha), numODE=std::move(numODE)](const auto& u){
+            //const T& rho, const T& K, const T& H, const T& l
+            auto beta=chfunctions::AlphaOrBeta_move(
+                -chfunctions::mertonLogRNCF(u, lambda, muJ, sigJ, 0.0, sigma), 
+                -(speed+delta*lambda-u*rho*sigma*adaV),
+                adaV*adaV, 
+                lambda
+            );
+            
+            auto expCF=chfunctions::exponentialCFBeta(u, delta);
+            return chfunctions::logAffine(
+                rungekutta::compute_efficient_2d(
+                    T, numODE, 
+                    std::vector<std::complex<double> >({0, 0}),
+                    [&](
+                        double t, 
+                        const std::complex<double>& x1,  
+                        const std::complex<double>& x2
+                    ){
+                        auto cfPart=(chfunctions::exponentialCFBeta(
+                            x1, 
+                            delta
+                        )-1.0)*chfunctions::gaussCF(u, muJ, sigJ);
+                        return std::vector<std::complex<double> >({
+                            beta(x1, cfPart),
+                            alpha(x1, cfPart)
+                        });
+                    }
+                ),
+                v0
+            );
+        };
+    };
+}
+TEST_CASE("Test time changed merton with volatility jumps", "[OptionCalibration]"){
+    auto r=.04;
+    auto sig=0.2;
+    auto T=1;
+    auto S0=178;  
+    auto lambda=.5;
+    auto muJ=-.05;
+    auto sigJ=.1;
+    auto speed=.3;
+    auto v0=.9;
+    auto adaV=.2;
+    auto rho=-.5;
+    auto delta=.2;
+    double discount=exp(-r*T);
+
+    std::vector<double> objParms={lambda, muJ, sigJ, sig, v0, speed, adaV, rho, delta};
+
+    auto CFBase=[T](
+        const auto& u,
+        const std::vector<double>& params
+    ){
+        auto lambda=params[0];
+        auto muJ=params[1];
+        auto sigJ=params[2];
+        auto sigma=params[3];
+        auto v0=params[4];
+        auto speed=params[5];
+        auto adaV=params[6];
+        auto rho=params[7];
+        auto delta=params[8];
+        return cfLogGeneric(T)(lambda, muJ, sigJ, sigma, v0, speed, adaV, rho, delta)(u);
+    };
+    std::vector<double> strikes={
+        95,100,130,150,160,165,170,175,185,190,195,200,210,240,250
+    }; 
+    std::vector<std::string> paramNames={
+       "lambda", "muJ", "sigJ", "sigma", "v0", "speed", "adaV", "rho", "delta"
+    };
+    std::vector<cuckoo::upper_lower<double>> constraints={
+        cuckoo::upper_lower<double>(0.0, 2.0),
+        cuckoo::upper_lower<double>(-1.0, 1.0),
+        cuckoo::upper_lower<double>(0.0, 2.0),
+        cuckoo::upper_lower<double>(0.0, 1.0),
+        cuckoo::upper_lower<double>(0.2, 1.8),
+        cuckoo::upper_lower<double>(0.0, 3.0),
+        cuckoo::upper_lower<double>(0.0, 3.0),
+        cuckoo::upper_lower<double>(-1.0, 1.0),
+        cuckoo::upper_lower<double>(0, 2)
+    };
+    printResults("MertonJumps", std::move(CFBase), strikes, objParms, constraints, paramNames, r, T, S0, 20.0);
    
 }
 
