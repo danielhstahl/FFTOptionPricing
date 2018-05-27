@@ -182,7 +182,7 @@ namespace optioncal{
         };   
 
     }
-
+    constexpr double largeNumber=5000;
     template<typename PhiHat, typename LogCfFN, typename DiscreteU>
     auto getObjFn_arr(PhiHat&& phiHattmp, LogCfFN&& cfFntmp, DiscreteU&& uArraytmp){
         return [
@@ -192,8 +192,9 @@ namespace optioncal{
         ](const auto&... param){
             auto cfInst=cfFn(param...);
             return futilities::sum(uArray, [&](const auto& u, const auto& index){
-                return std::norm(
-                    phiHat[index]-cfInst(std::complex<double>(1.0, u))
+                auto result=cfInst(std::complex<double>(1.0, u));
+                return (std::isnan(result.real())||std::isnan(result.imag()))?largeNumber:std::norm(
+                    phiHat[index]-result
                 );         
             })/(double)uArray.size();
         };
