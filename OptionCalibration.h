@@ -190,9 +190,10 @@ namespace optioncal{
             cfFn=std::move(cfFntmp), 
             uArray=std::move(uArraytmp)
         ](const auto&... param){
+            auto cfInst=cfFn(param...);
             return futilities::sum(uArray, [&](const auto& u, const auto& index){
                 return std::norm(
-                    phiHat[index]-cfFn(std::complex<double>(1.0, u), param...)
+                    phiHat[index]-cfInst(std::complex<double>(1.0, u))
                 );         
             })/(double)uArray.size();
         };

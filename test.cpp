@@ -1252,8 +1252,10 @@ TEST_CASE("getObjfn_arr", "[OptionCalibration]"){
         std::complex<double>(5, 0)
     };
     std::vector<double> u={6, 7, 8};
-    auto cf=[](const auto& cmpU, const auto& _){
-        return std::complex<double>(cmpU.imag(), 0.0);
+    auto cf=[](const auto& _){
+        return [](const auto& cmpU){
+            return std::complex<double>(cmpU.imag(), 0.0);
+        };
     };
     auto hoc=optioncal::getObjFn_arr(std::move(arr), std::move(cf), std::move(u));
     double expected=9;//3*3^2/3
@@ -1269,9 +1271,14 @@ TEST_CASE("getObjfn_arr multiple parameters", "[OptionCalibration]"){
         std::complex<double>(5, 0)
     };
     std::vector<double> u={6, 7, 8};
-    auto cf=[](const auto& cmpU, const auto& v1, const auto& v2){
-        return std::complex<double>(cmpU.imag(), 0.0);
+    auto cf=[](const auto& v1, const auto& v2){
+        return [&](const auto& cmpU){
+            return std::complex<double>(cmpU.imag(), 0.0);
+        };
     };
+    /*auto cf=[](const auto& cmpU, const auto& v1, const auto& v2){
+        return std::complex<double>(cmpU.imag(), 0.0);
+    };*/
     auto hoc=optioncal::getObjFn_arr(std::move(arr), std::move(cf), std::move(u));
     double expected=9;//3*3^2/3
     double tmp1=0;
@@ -1285,8 +1292,13 @@ TEST_CASE("getObjfn_arr vector parameter", "[OptionCalibration]"){
         std::complex<double>(5, 0)
     };
     std::vector<double> u={6, 7, 8};
-    auto cf=[](const auto& cmpU, const auto& v1){
+    /*auto cf=[](const auto& cmpU, const auto& v1){
         return std::complex<double>(cmpU.imag(), 0.0);
+    };*/
+    auto cf=[](const auto& v1){
+        return [&](const auto& cmpU){
+            return std::complex<double>(cmpU.imag(), 0.0);
+        };
     };
     auto hoc=optioncal::getObjFn_arr(std::move(arr), std::move(cf), std::move(u));
     double expected=9;//3*3^2/3
