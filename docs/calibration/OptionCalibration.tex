@@ -95,20 +95,26 @@ We then fit the spline for a Merton jump diffusion model with stochastic volatil
 
 \includegraphics{OptionCalibration-006}
 
+\subsubsection{Merton stochastic vol}
+
+We then fit the spline for a Merton jump diffusion model with stochastic volatility
+
+\includegraphics{OptionCalibration-007}
+
 \subsubsection{Actual Call prices}
 
 We use Apple call options on January 19 2018 with expiration one year in the future.  The following chart shows the results:
 
-\includegraphics{OptionCalibration-007}
+\includegraphics{OptionCalibration-008}
 
 \subsection{Numerical Integration Error}
 
 \subsubsection{Black Scholes}
 The numerical integration error can be seen as follows:
 
-\includegraphics{OptionCalibration-008}
-
 \includegraphics{OptionCalibration-009}
+
+\includegraphics{OptionCalibration-010}
 
 
 
@@ -119,9 +125,9 @@ While in theory the integration should be valid over all real numbers, it appear
 
 The following plot shows the integration comparison for a Heston model.
 
-\includegraphics{OptionCalibration-010}
-
 \includegraphics{OptionCalibration-011}
+
+\includegraphics{OptionCalibration-012}
 
 The model shows very good alignment.
 
@@ -130,23 +136,28 @@ The model shows very good alignment.
 
 The CGMY process does not have the same accuracy as diffusion and jump-diffusion processes.
 
-\includegraphics{OptionCalibration-012}
-
 \includegraphics{OptionCalibration-013}
+
+\includegraphics{OptionCalibration-014}
 
 This inaccuracy is why we restrict our model to Levy processes with finite variation.  
 
 \subsubsection{Merton}
 
-\includegraphics{OptionCalibration-014}
-
 \includegraphics{OptionCalibration-015}
 
-
-\subsubsection{Merton with Time Changed Volatility}
 \includegraphics{OptionCalibration-016}
 
+
+\subsubsection{Merton with Time Changed Volatility with jumps}
 \includegraphics{OptionCalibration-017}
+
+\includegraphics{OptionCalibration-018}
+
+\subsubsection{Merton with Time Changed Volatility}
+\includegraphics{OptionCalibration-019}
+
+\includegraphics{OptionCalibration-020}
 
 \subsection{Estimates}
 
@@ -196,16 +207,16 @@ Again, we use the cuckoo search. The search shows the following results:
 
 \begin{Schunk}
 \begin{Soutput}
-  paramater actual     optimal
-1    lambda   0.50  0.00943252
-2       muJ  -0.05 -0.19488700
-3      sigJ   0.10  1.01096000
-4     sigma   0.20  0.19277700
-5        v0   0.90  1.16260000
-6     speed   0.30  2.13128000
-7      adaV   0.20  1.41406000
-8       rho  -0.50 -0.30657900
-9     delta   0.20  1.13548000
+  paramater actual    optimal
+1    lambda   0.30  0.6475740
+2       muJ  -0.05 -0.0697346
+3      sigJ   0.10  0.0000000
+4     sigma   0.10  0.1028700
+5        v0   0.90  0.8545650
+6     speed   0.30  1.3384600
+7      adaV   0.20  0.6686090
+8       rho  -0.50  0.2291110
+9     delta   0.20  1.2055600
 \end{Soutput}
 \end{Schunk}
 
@@ -218,11 +229,11 @@ The parameters for the Apple data for Heston is the following:
 \begin{Schunk}
 \begin{Soutput}
   paramater   estimate
-1     sigma  0.3225870
-2     speed  1.8623100
-3      adaV  1.8483600
-4       rho -0.1963840
-5     v0Hat  0.0743235
+1     sigma  0.5601300
+2     speed  0.0386517
+3      adaV  3.9056400
+4       rho -0.5043350
+5     v0Hat  1.8455400
 \end{Soutput}
 \end{Schunk}
 
@@ -230,8 +241,8 @@ The MSE is the following:
 
 \begin{Schunk}
 \begin{Soutput}
-        value
-1 8.73564e-05
+  value
+1  5000
 \end{Soutput}
 \end{Schunk}
 
@@ -244,11 +255,11 @@ The parameters for the Apple data for CGMY is the following:
 \begin{Schunk}
 \begin{Soutput}
   paramater  estimate
-1       sig  0.359487
-2         C  0.634000
-3         G  6.830330
-4         M  0.668240
-5         Y -1.263120
+1       sig  0.213909
+2         C  1.534510
+3         G  4.174330
+4         M  6.871710
+5         Y -2.943240
 \end{Soutput}
 \end{Schunk}
 
@@ -256,8 +267,8 @@ The MSE is the following:
 
 \begin{Schunk}
 \begin{Soutput}
-  value
-1   NaN
+       value
+1 3.9113e-05
 \end{Soutput}
 \end{Schunk}
 
@@ -266,23 +277,23 @@ The MSE is the following:
 \begin{Schunk}
 \begin{Soutput}
   paramater   estimate
-1       sig  0.3097440
-2         C  1.6663800
-3         G 12.4950000
-4         M  0.6565980
-5         Y  0.2987190
-6     speed  1.1438400
-7      adaV  3.1074600
-8       rho -0.0467101
-9        v0  0.3599130
+1       sig  0.3006510
+2         C  0.0106702
+3         G  0.9031860
+4         M  2.2467500
+5         Y -2.2555900
+6     speed  1.6553600
+7      adaV  1.3523800
+8       rho -0.1785730
+9        v0  0.2146390
 \end{Soutput}
 \end{Schunk}
 The MSE is the following:
 
 \begin{Schunk}
 \begin{Soutput}
-  value
-1   NaN
+        value
+1 4.30939e-05
 \end{Soutput}
 \end{Schunk}
 

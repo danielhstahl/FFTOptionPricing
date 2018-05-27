@@ -136,6 +136,16 @@ k=read.csv(paste0(baseUrl, mertonJumps, globalSpline, ".csv"))
 plotSpline(k)
 @
 
+\subsubsection{Merton stochastic vol}
+
+We then fit the spline for a Merton jump diffusion model with stochastic volatility
+
+<<fig=T, echo=FALSE>>=
+MertonCorr="MertonCorr"
+k=read.csv(paste0(baseUrl, MertonCorr, globalSpline, ".csv"))
+plotSpline(k)
+@
+
 \subsubsection{Actual Call prices}
 
 We use Apple call options on January 19 2018 with expiration one year in the future.  The following chart shows the results:
@@ -218,15 +228,26 @@ plotIntegration(integrationMerton, "Im")
 @
 
 
-\subsubsection{Merton with Time Changed Volatility}
+\subsubsection{Merton with Time Changed Volatility with jumps}
 <<fig=T, echo=FALSE>>=
-integrationMerton=read.csv(paste0(baseUrl, mertonJumps, globalIntegration, ".csv"))
+integrationMertonJumps=read.csv(paste0(baseUrl, mertonJumps, globalIntegration, ".csv"))
 plotIntegration(integrationMerton, "Real")
 
 @
 
 <<fig=T, echo=FALSE>>=
-plotIntegration(integrationMerton, "Im")
+plotIntegration(integrationMertonJumps, "Im")
+@
+
+\subsubsection{Merton with Time Changed Volatility}
+<<fig=T, echo=FALSE>>=
+integrationMertonVol=read.csv(paste0(baseUrl, MertonCorr, globalIntegration, ".csv"))
+plotIntegration(integrationMertonVol, "Real")
+
+@
+
+<<fig=T, echo=FALSE>>=
+plotIntegration(integrationMertonVol, "Im")
 @
 
 \subsection{Estimates}

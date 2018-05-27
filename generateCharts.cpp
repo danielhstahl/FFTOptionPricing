@@ -9,6 +9,7 @@
 #include <iostream>
 #include "CharacteristicFunctions.h"
 #include "cuckoo.h"
+#include "utils.h"
 #include "OptionCalibration.h"
 
 
@@ -21,7 +22,7 @@ void printResults(
     CF&& cf, 
     const std::vector<double>& strikes,
     std::vector<double>& objParms,
-    const std::vector<cuckoo::upper_lower<double>>& constraints,
+    const std::vector<swarm_utils::upper_lower<double>>& constraints,
     const std::vector<std::string>& paramNames,
     double r,
     double T, 
@@ -47,7 +48,7 @@ void printResults(
     KArray[n+1]=stock*.03;
     int numU=256;
     auto optionPrices=optionprice::FangOostCallPrice(stock, KArray, r, T, numU, [&](const auto& u){
-        return exp(r*T*u+cf(u, objParms));
+        return exp(r*T*u+cf(objParms)(u));
     });
     auto getReducedAndReversed=[](const std::vector<double>& arr){  
         auto arrTmp=std::vector<double>(arr.begin()+1, arr.end()-1);
@@ -75,7 +76,7 @@ void printResults(
     dkLogArray[m+1]=.03;
 
     auto optionPricesLogDK=optionprice::FangOostCallPrice(1.0, dkLogArray, r, T, numU, [&](const auto& u){
-        return exp(r*T*u+cf(u, objParms));
+        return exp(r*T*u+cf(objParms)(u));
     });
     std::ofstream splineFileCall;
 
@@ -97,9 +98,10 @@ void printResults(
     std::ofstream optimalParameters;
     numericIntegration.open("./docs/calibration/"+nameToWrite+"Integration.csv");
     numericIntegration<<"u, estimateReal, estimateIm, exactReal, exactIm"<<std::endl;
+    auto cfh=cf(objParms);
     for(int i=0; i<phis.size(); ++i){ 
         const auto u=uArray[i];
-        const auto actualPhi=cf(std::complex<double>(1.0, u), objParms);
+        const auto actualPhi=cfh(std::complex<double>(1.0, u));
         numericIntegration<<u<<", "<<phis[i].real()<<", "<<phis[i].imag()<<", "<<actualPhi.real()<<","<<actualPhi.imag()<<std::endl;
     }
     numericIntegration.close();
@@ -112,8 +114,8 @@ void printResults(
     
     const auto results=cuckoo::optimize(objFn, constraints, nestSize, numSims, tol, 42);
 
-    auto params=std::get<cuckoo::optparms>(results);
-    auto objFnRes=std::get<cuckoo::fnval>(results);
+    auto params=std::get<swarm_utils::optparms>(results);
+    auto objFnRes=std::get<swarm_utils::fnval>(results);
 
     optimalParameters.open("./docs/calibration/"+nameToWrite+"Parameters.csv");
     optimalParameters<<"paramater, actual, optimal"<<std::endl;
@@ -130,7 +132,7 @@ void printResults(
     CF&& cf, 
     const std::vector<double>& strikes,
     std::vector<double>& objParms,
-    const std::vector<cuckoo::upper_lower<double>>& constraints,
+    const std::vector<swarm_utils::upper_lower<double>>& constraints,
     const std::vector<std::string>& paramNames,
     double r,
     double T, 
@@ -154,16 +156,18 @@ TEST_CASE("Test BS Large U", "[OptionCalibration]"){
     double r=0;
     double sigma=.3;
     double T=1.0;
-    std::vector<cuckoo::upper_lower<double>> constraints={
-        cuckoo::upper_lower<double>(0.0, .6),
+    std::vector<swarm_utils::upper_lower<double>> constraints={
+        swarm_utils::upper_lower<double>(0.0, .6),
     };
     std::vector<std::string> paramNames={
         "sigma"
     };
     std::vector<double> strikes={4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
-    auto cf=[&](const auto&u, const auto& objParams){
-        auto sigma=objParams[0];
-        return -sigma*sigma*u*.5+sigma*sigma*u*u*.5;
+    auto cf=[T](const auto& objParams){
+        return [=](const auto&u){
+            auto sigma=objParams[0];
+            return (-sigma*sigma*u*.5+sigma*sigma*u*u*.5)*T;
+        };
     };
     std::vector<double> objParams={sigma};
     std::vector<double> uArray={-20, -15, -10, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 10, 15, 20};
@@ -176,16 +180,18 @@ TEST_CASE("Test BS", "[OptionCalibration]"){
     double r=.05;
     double sigma=.3;
     double T=1.0;
-    std::vector<cuckoo::upper_lower<double>> constraints={
-        cuckoo::upper_lower<double>(0.0, .6),
+    std::vector<swarm_utils::upper_lower<double>> constraints={
+        swarm_utils::upper_lower<double>(0.0, .6),
     };
     std::vector<std::string> paramNames={
         "sigma"
     };
     std::vector<double> strikes={4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
-    auto cf=[&](const auto&u, const auto& objParams){
+    auto cf=[T](const auto& objParams){
         auto sigma=objParams[0];
-        return -sigma*sigma*u*.5+sigma*sigma*u*u*.5;
+        return [=](const auto&u){
+            return (-sigma*sigma*u*.5+sigma*sigma*u*u*.5)*T;
+        };
     };
     std::vector<double> objParams={sigma};
     printResults("BlackScholes", std::move(cf), strikes, objParams, constraints, paramNames, r, T, stock, 3.0);
@@ -208,12 +214,12 @@ TEST_CASE("Test Heston", "[OptionCalibration]"){
     auto adaV=c/sqrt(b);
     std::vector<double> objParms={sig, speed, adaV, rho, v0Hat};
 
-    std::vector<cuckoo::upper_lower<double>> constraints={
-        cuckoo::upper_lower<double>(0.0, .6),
-        cuckoo::upper_lower<double>(0.0, 2.0),
-        cuckoo::upper_lower<double>(0.0, 4.0),
-        cuckoo::upper_lower<double>(-1.0, 1.0),
-        cuckoo::upper_lower<double>(0, 2),
+    std::vector<swarm_utils::upper_lower<double>> constraints={
+        swarm_utils::upper_lower<double>(0.0, .6),
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(0.0, 4.0),
+        swarm_utils::upper_lower<double>(-1.0, 1.0),
+        swarm_utils::upper_lower<double>(0, 2),
     };
     std::vector<std::string> paramNames={
         "sigma","speed", "adaV", "rho", "v0Hat"
@@ -223,7 +229,6 @@ TEST_CASE("Test Heston", "[OptionCalibration]"){
         95,100,130,150,160,165,170,175,185,190,195,200,210,240,250
     };    
     auto cf=[T](
-        const auto& u,
         const std::vector<double>& params
     ){
         auto sig=params[0];
@@ -231,37 +236,43 @@ TEST_CASE("Test Heston", "[OptionCalibration]"){
         auto adaV=params[2];
         auto rho=params[3];
         auto v0Hat=params[4];
-        return chfunctions::cirLogMGF(
-            -chfunctions::cgmyLogRNCF(u, 0.0, 1.0, 1.0, .5, 0.0, sig),
-            speed, 
-            speed-adaV*rho*u*sig,
-            adaV,
-            T, 
-            v0Hat
-        );
+        return [=](const auto& u){
+            return chfunctions::cirLogMGF(
+                -chfunctions::cgmyLogRNCF(u, 0.0, 1.0, 1.0, .5, 0.0, sig),
+                speed, 
+                speed-adaV*rho*u*sig,
+                adaV,
+                T, 
+                v0Hat
+            );
+        };
+        
     };
     printResults("Heston", std::move(cf), strikes, objParms, constraints, paramNames, r, T, stock, 3.0);
 }
 
 TEST_CASE("Test CGMY", "[OptionCalibration]"){
     auto r=.04;
-    auto sig=0.2;
+    auto sig=0.1;
     auto T=1.0;
     auto S0=178.0;  
-    auto C=.14;
+    auto C=.1;
     auto G=2.4;
     auto M=10.7;
-    auto Y=-3.0;
+    auto Y=.5;
 
     std::vector<double> objParms={sig, C, G, M, Y};
 
-    auto CFBase=[T](const auto& u, const std::vector<double>& params){
+    auto CFBase=[T](const std::vector<double>& params){
         auto sig=params[0];
         auto C=params[1];
         auto G=params[2];
         auto M=params[3];
         auto Y=params[4];
-        return chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, sig)*T;
+        return [=](const auto& u){
+            return chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, sig)*T;
+        };
+        
     };
     std::vector<double> strikes={
         95,100,130,150,160,165,170,175,185,190,195,200,210,240,250
@@ -269,12 +280,12 @@ TEST_CASE("Test CGMY", "[OptionCalibration]"){
     std::vector<std::string> paramNames={
         "sig", "C", "G", "M", "Y"
     };
-    std::vector<cuckoo::upper_lower<double>> constraints={
-        cuckoo::upper_lower<double>(0.0, .6),
-        cuckoo::upper_lower<double>(0.0, 2.0),
-        cuckoo::upper_lower<double>(0.0, 15),
-        cuckoo::upper_lower<double>(0.0, 15),
-        cuckoo::upper_lower<double>(-3, 2)
+    std::vector<swarm_utils::upper_lower<double>> constraints={
+        swarm_utils::upper_lower<double>(0.0, .6),
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(0.0, 15),
+        swarm_utils::upper_lower<double>(0.0, 15),
+        swarm_utils::upper_lower<double>(-3, 2)
     };
     printResults("CGMY", std::move(CFBase), strikes, objParms, constraints, paramNames, r, T, S0, 10.0);
    
@@ -293,14 +304,16 @@ TEST_CASE("Test Merton", "[OptionCalibration]"){
     std::vector<double> objParms={sig, lambda, muJ, sigJ};
 
     auto CFBase=[T](
-        const auto& u,
         const std::vector<double>& params
     ){
         auto sig=params[0];
         auto lambda=params[1];
         auto muJ=params[2];
         auto sigJ=params[3];
-        return chfunctions::mertonLogRNCF(u, lambda, muJ, sigJ, 0.0, sig)*T;
+        return [=](const auto& u){
+            return chfunctions::mertonLogRNCF(u, lambda, muJ, sigJ, 0.0, sig)*T;
+        };
+        
     };
     std::vector<double> strikes={
         95,100,130,150,160,165,170,175,185,190,195,200,210,240,250
@@ -308,13 +321,71 @@ TEST_CASE("Test Merton", "[OptionCalibration]"){
     std::vector<std::string> paramNames={
         "sig", "lambda", "muJ", "sigJ"
     };
-    std::vector<cuckoo::upper_lower<double>> constraints={
-        cuckoo::upper_lower<double>(0.0, .6),
-        cuckoo::upper_lower<double>(0.0, 2.0),
-        cuckoo::upper_lower<double>(0.0, 1.5),
-        cuckoo::upper_lower<double>(0.0, 1.5)
+    std::vector<swarm_utils::upper_lower<double>> constraints={
+        swarm_utils::upper_lower<double>(0.0, .6),
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(0.0, 1.5),
+        swarm_utils::upper_lower<double>(0.0, 1.5)
     };
     printResults("Merton", std::move(CFBase), strikes, objParms, constraints, paramNames, r, T, S0, 10.0);
+   
+}
+TEST_CASE("Test Merton with stochastic vol", "[OptionCalibration]"){
+    auto r=.04;//seems high
+    auto sig=0.2;
+    auto T=.25;
+    auto S0=178.0;  
+    auto lambda=.5;
+    auto muJ=.05;
+    auto sigJ=.05;
+    auto rho=-.5;
+    auto speed=.5;
+    auto adaV=.2;
+    auto v0=.9;
+    double discount=exp(-r*T);
+
+    std::vector<double> objParms={sig, lambda, muJ, sigJ, speed, adaV, rho, v0};
+
+    auto CFBase=[T](
+        const std::vector<double>& params
+    ){
+        auto sig=params[0];
+        auto lambda=params[1];
+        auto muJ=params[2];
+        auto sigJ=params[3];
+        auto speed=params[4];
+        auto adaV=params[5];
+        auto rho=params[6];
+        auto v0Hat=params[7];
+        return [=](const auto& u){
+            return chfunctions::cirLogMGF(
+                -chfunctions::mertonLogRNCF(u, lambda, muJ, sigJ, 0.0, sig),
+                speed, 
+                speed-adaV*rho*u*sig,
+                adaV,
+                T, 
+                v0Hat
+            );
+        };
+        
+    };
+    std::vector<double> strikes={
+        95,100,130,150,160,165,170,175,185,190,195,200,210,240,250
+    }; 
+    std::vector<std::string> paramNames={
+        "sig", "lambda", "muJ", "sigJ", "speed", "adaV", "rho", "v0"
+    };
+    std::vector<swarm_utils::upper_lower<double>> constraints={
+        swarm_utils::upper_lower<double>(0.0, .6),
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(0.0, 1.5),
+        swarm_utils::upper_lower<double>(0.0, 1.5),
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(0.0, 4.0),
+        swarm_utils::upper_lower<double>(-1.0, 1.0),
+        swarm_utils::upper_lower<double>(0, 2)
+    };
+    printResults("MertonCorr", std::move(CFBase), strikes, objParms, constraints, paramNames, r, T, S0, 10.0);
    
 }
 auto cfLogGeneric(
@@ -368,10 +439,10 @@ auto cfLogGeneric(
 }
 TEST_CASE("Test time changed merton with volatility jumps", "[OptionCalibration]"){
     auto r=.04;
-    auto sig=0.2;
+    auto sig=0.1;
     auto T=1;
     auto S0=178;  
-    auto lambda=.5;
+    auto lambda=.3;
     auto muJ=-.05;
     auto sigJ=.1;
     auto speed=.3;
@@ -384,7 +455,6 @@ TEST_CASE("Test time changed merton with volatility jumps", "[OptionCalibration]
     std::vector<double> objParms={lambda, muJ, sigJ, sig, v0, speed, adaV, rho, delta};
 
     auto CFBase=[T](
-        const auto& u,
         const std::vector<double>& params
     ){
         auto lambda=params[0];
@@ -396,7 +466,7 @@ TEST_CASE("Test time changed merton with volatility jumps", "[OptionCalibration]
         auto adaV=params[6];
         auto rho=params[7];
         auto delta=params[8];
-        return cfLogGeneric(T)(lambda, muJ, sigJ, sigma, v0, speed, adaV, rho, delta)(u);
+        return cfLogGeneric(T)(lambda, muJ, sigJ, sigma, v0, speed, adaV, rho, delta);
     };
     std::vector<double> strikes={
         95,100,130,150,160,165,170,175,185,190,195,200,210,240,250
@@ -404,16 +474,16 @@ TEST_CASE("Test time changed merton with volatility jumps", "[OptionCalibration]
     std::vector<std::string> paramNames={
        "lambda", "muJ", "sigJ", "sigma", "v0", "speed", "adaV", "rho", "delta"
     };
-    std::vector<cuckoo::upper_lower<double>> constraints={
-        cuckoo::upper_lower<double>(0.0, 2.0),
-        cuckoo::upper_lower<double>(-1.0, 1.0),
-        cuckoo::upper_lower<double>(0.0, 2.0),
-        cuckoo::upper_lower<double>(0.0, 1.0),
-        cuckoo::upper_lower<double>(0.2, 1.8),
-        cuckoo::upper_lower<double>(0.0, 3.0),
-        cuckoo::upper_lower<double>(0.0, 3.0),
-        cuckoo::upper_lower<double>(-1.0, 1.0),
-        cuckoo::upper_lower<double>(0, 2)
+    std::vector<swarm_utils::upper_lower<double>> constraints={
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(-1.0, 1.0),
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(0.0, 1.0),
+        swarm_utils::upper_lower<double>(0.2, 1.8),
+        swarm_utils::upper_lower<double>(0.0, 3.0),
+        swarm_utils::upper_lower<double>(0.0, 3.0),
+        swarm_utils::upper_lower<double>(-1.0, 1.0),
+        swarm_utils::upper_lower<double>(0, 2)
     };
     printResults("MertonJumps", std::move(CFBase), strikes, objParms, constraints, paramNames, r, T, S0, 20.0);
    
@@ -488,19 +558,19 @@ TEST_CASE("Heston on actual data", "[OptionCalibration]"){
     int N=1024;
     auto phis=foEstimate(N, uArray);
    
-    std::vector<cuckoo::upper_lower<double>> constraints={
-        cuckoo::upper_lower<double>(0.0, .6),
-        cuckoo::upper_lower<double>(0.0, 2.0),
-        cuckoo::upper_lower<double>(0.0, 4.0),
-        cuckoo::upper_lower<double>(-1.0, 1.0),
-        cuckoo::upper_lower<double>(0, 2),
+    std::vector<swarm_utils::upper_lower<double>> constraints={
+        swarm_utils::upper_lower<double>(0.0, .6),
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(0.0, 4.0),
+        swarm_utils::upper_lower<double>(-1.0, 1.0),
+        swarm_utils::upper_lower<double>(0, 2),
     };
     std::vector<std::string> paramNames={
         "sigma","speed", "adaV", "rho", "v0Hat"
     };
   
     auto cf=[T](
-        const auto& u,
+        
         const std::vector<double>& params
     ){
         auto sig=params[0];
@@ -508,14 +578,17 @@ TEST_CASE("Heston on actual data", "[OptionCalibration]"){
         auto adaV=params[2];
         auto rho=params[3];
         auto v0Hat=params[4];
-        return chfunctions::cirLogMGF(
-            -chfunctions::cgmyLogRNCF(u, 0.0, 1.0, 1.0, .5, 0.0, sig),
-            speed, 
-            speed-adaV*rho*u*sig,
-            adaV,
-            T, 
-            v0Hat
-        );
+        return [&](const auto& u){
+            return chfunctions::cirLogMGF(
+                -chfunctions::cgmyLogRNCF(u, 0.0, 1.0, 1.0, .5, 0.0, sig),
+                speed, 
+                speed-adaV*rho*u*sig,
+                adaV,
+                T, 
+                v0Hat
+            );
+        };
+        
     };
     auto objFn=optioncal::getObjFn_arr(
         std::move(phis),
@@ -525,8 +598,8 @@ TEST_CASE("Heston on actual data", "[OptionCalibration]"){
 
     const auto results=cuckoo::optimize(objFn, constraints, nestSize, numSims, tol, 42);
 
-    auto params=std::get<cuckoo::optparms>(results);
-    auto objFnRes=std::get<cuckoo::fnval>(results);
+    auto params=std::get<swarm_utils::optparms>(results);
+    auto objFnRes=std::get<swarm_utils::fnval>(results);
 
     optimalParameters.open("./docs/calibration/HestonRealParameters.csv");
     optimalParameters<<"paramater, estimate "<<std::endl;
@@ -568,24 +641,26 @@ TEST_CASE("CGMY on actual data", "[OptionCalibration]"){
     auto phis=foEstimate(N, uArray);
    
 
-    auto cf=[T](const auto& u, const std::vector<double>& params){
+    auto cf=[T](const std::vector<double>& params){
         auto sig=params[0];
         auto C=params[1];
         auto G=params[2];
         auto M=params[3];
         auto Y=params[4];
-        return chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, sig)*T;
+        return [=](const auto& u){
+            return chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, sig)*T;
+        };
     };
     
     std::vector<std::string> paramNames={
         "sig", "C", "G", "M", "Y"
     };
-    std::vector<cuckoo::upper_lower<double>> constraints={
-        cuckoo::upper_lower<double>(0.0, .6),
-        cuckoo::upper_lower<double>(0.0, 2.0),
-        cuckoo::upper_lower<double>(0.0, 15),
-        cuckoo::upper_lower<double>(0.0, 15),
-        cuckoo::upper_lower<double>(-3, 2)
+    std::vector<swarm_utils::upper_lower<double>> constraints={
+        swarm_utils::upper_lower<double>(0.0, .6),
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(0.0, 15),
+        swarm_utils::upper_lower<double>(0.0, 15),
+        swarm_utils::upper_lower<double>(-3, 2)
         
     };
     auto objFn=optioncal::getObjFn_arr(
@@ -596,8 +671,8 @@ TEST_CASE("CGMY on actual data", "[OptionCalibration]"){
 
     const auto results=cuckoo::optimize(objFn, constraints, nestSize, numSims, tol, 42);
 
-    auto params=std::get<cuckoo::optparms>(results);
-    auto objFnRes=std::get<cuckoo::fnval>(results);
+    auto params=std::get<swarm_utils::optparms>(results);
+    auto objFnRes=std::get<swarm_utils::fnval>(results);
 
     optimalParameters.open("./docs/calibration/CGMYRealParameters.csv");
     optimalParameters<<"paramater, estimate "<<std::endl;
@@ -640,7 +715,7 @@ TEST_CASE("Time changed CGMY on actual data", "[OptionCalibration]"){
     auto phis=foEstimate(N, uArray);
    
 
-    auto cf=[T](const auto& u, const std::vector<double>& params){
+    auto cf=[T]( const std::vector<double>& params){
         auto sig=params[0];
         auto C=params[1];
         auto G=params[2];
@@ -650,29 +725,32 @@ TEST_CASE("Time changed CGMY on actual data", "[OptionCalibration]"){
         auto adaV=params[6];
         auto rho=params[7];
         auto v0=params[8];
-        return chfunctions::cirLogMGF(
+        return [=](const auto& u){
+            return chfunctions::cirLogMGF(
                 -chfunctions::cgmyLogRNCF(u, C, G, M, Y, 0.0, sig),
                 speed, 
                 speed-adaV*rho*u*sig,
                 adaV,
                 T, 
                 v0
-        );
+            );
+        };
+        
     };
     
     std::vector<std::string> paramNames={
         "sig", "C", "G", "M", "Y", "speed", "adaV", "rho", "v0"
     };
-    std::vector<cuckoo::upper_lower<double>> constraints={
-        cuckoo::upper_lower<double>(0.0, .6),
-        cuckoo::upper_lower<double>(0.0, 2.0),
-        cuckoo::upper_lower<double>(0.0, 15),
-        cuckoo::upper_lower<double>(0.0, 15),
-        cuckoo::upper_lower<double>(-3, 2),
-        cuckoo::upper_lower<double>(0.0, 2.0),
-        cuckoo::upper_lower<double>(0.0, 4.0),
-        cuckoo::upper_lower<double>(-1.0, 1.0),
-        cuckoo::upper_lower<double>(0, 2)
+    std::vector<swarm_utils::upper_lower<double>> constraints={
+        swarm_utils::upper_lower<double>(0.0, .6),
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(0.0, 15),
+        swarm_utils::upper_lower<double>(0.0, 15),
+        swarm_utils::upper_lower<double>(-3, 2),
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(0.0, 4.0),
+        swarm_utils::upper_lower<double>(-1.0, 1.0),
+        swarm_utils::upper_lower<double>(0, 2)
     };
     auto objFn=optioncal::getObjFn_arr(
         std::move(phis),
@@ -682,8 +760,8 @@ TEST_CASE("Time changed CGMY on actual data", "[OptionCalibration]"){
 
     const auto results=cuckoo::optimize(objFn, constraints, nestSize, numSims, tol, 42);
 
-    auto params=std::get<cuckoo::optparms>(results);
-    auto objFnRes=std::get<cuckoo::fnval>(results);
+    auto params=std::get<swarm_utils::optparms>(results);
+    auto objFnRes=std::get<swarm_utils::fnval>(results);
 
     optimalParameters.open("./docs/calibration/CGMYTimeChangeRealParameters.csv");
     optimalParameters<<"paramater, estimate "<<std::endl;
@@ -727,7 +805,7 @@ TEST_CASE("Time changed Merton", "[OptionCalibration]"){
    
 
     auto cf=[T](
-        const auto& u,
+        
         const std::vector<double>& params
     ){
         auto sig=params[0];
@@ -738,28 +816,31 @@ TEST_CASE("Time changed Merton", "[OptionCalibration]"){
         auto adaV=params[5];
         auto rho=params[6];
         auto v0=params[7];
-        return chfunctions::cirLogMGF(
-            -chfunctions::mertonLogRNCF(u, lambda, muJ, sigJ, 0.0, sig),
-            speed, 
-            speed-adaV*rho*u*sig,
-            adaV,
-            T, 
-            v0
-        );
+        return [=](const auto& u){
+            return chfunctions::cirLogMGF(
+                -chfunctions::mertonLogRNCF(u, lambda, muJ, sigJ, 0.0, sig),
+                speed, 
+                speed-adaV*rho*u*sig,
+                adaV,
+                T, 
+                v0
+            );
+        };
+        
     };
 
     std::vector<std::string> paramNames={
         "sig", "lambda", "muJ", "sigJ", "speed", "adaV", "rho", "v0"
     };
-    std::vector<cuckoo::upper_lower<double>> constraints={
-        cuckoo::upper_lower<double>(0.0, .6),
-        cuckoo::upper_lower<double>(0.0, .5),
-        cuckoo::upper_lower<double>(0.0, 1.5),
-        cuckoo::upper_lower<double>(0.0, 1.5),
-        cuckoo::upper_lower<double>(0.0, 2.0),
-        cuckoo::upper_lower<double>(0.0, 4.0),
-        cuckoo::upper_lower<double>(-1.0, 1.0),
-        cuckoo::upper_lower<double>(0, 2)
+    std::vector<swarm_utils::upper_lower<double>> constraints={
+        swarm_utils::upper_lower<double>(0.0, .6),
+        swarm_utils::upper_lower<double>(0.0, .5),
+        swarm_utils::upper_lower<double>(0.0, 1.5),
+        swarm_utils::upper_lower<double>(0.0, 1.5),
+        swarm_utils::upper_lower<double>(0.0, 2.0),
+        swarm_utils::upper_lower<double>(0.0, 4.0),
+        swarm_utils::upper_lower<double>(-1.0, 1.0),
+        swarm_utils::upper_lower<double>(0, 2)
     };
     
     auto objFn=optioncal::getObjFn_arr(
@@ -770,8 +851,8 @@ TEST_CASE("Time changed Merton", "[OptionCalibration]"){
 
     const auto results=cuckoo::optimize(objFn, constraints, nestSize, numSims, tol, 42);
 
-    auto params=std::get<cuckoo::optparms>(results);
-    auto objFnRes=std::get<cuckoo::fnval>(results);
+    auto params=std::get<swarm_utils::optparms>(results);
+    auto objFnRes=std::get<swarm_utils::fnval>(results);
 
     optimalParameters.open("./docs/calibration/MertonTimeChangeRealParameters.csv");
     optimalParameters<<"paramater, estimate "<<std::endl;
