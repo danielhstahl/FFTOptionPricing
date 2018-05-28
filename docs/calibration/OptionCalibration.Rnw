@@ -201,7 +201,7 @@ The model shows very good alignment.
 
 \subsubsection{CGMY}
 
-The CGMY process does not have the same accuracy as diffusion and jump-diffusion processes.
+The CGMY process also shows good accuracy.
 
 <<fig=T, echo=FALSE>>=
 integrationCGMY=read.csv(paste0(baseUrl, cgmy, globalIntegration, ".csv"))
@@ -213,7 +213,7 @@ plotIntegration(integrationCGMY, "Real")
 plotIntegration(integrationCGMY, "Im")
 @
 
-This inaccuracy is why we restrict our model to Levy processes with finite variation.  
+
 
 \subsubsection{Merton}
 
